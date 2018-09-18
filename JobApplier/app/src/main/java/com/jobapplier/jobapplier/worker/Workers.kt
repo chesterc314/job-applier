@@ -25,10 +25,9 @@ class JobApplierJobCreator : JobCreator {
 class JobApplierJob : Job() {
     override fun onRunJob(params: Job.Params): Job.Result {
         val extras = params.extras
-
         val application = ApplicationModel(
-                extras.getString("jobTitle", ""),
-                extras.getString("location", ""),
+                extras.getString("jobTitle", "").toLowerCase(),
+                extras.getString("location", "").toLowerCase(),
                 extras.getString("firstName", ""),
                 extras.getString("lastName", ""),
                 extras.getString("email", ""),
@@ -67,7 +66,7 @@ class JobApplierJob : Job() {
                 null
             } else {
                 JobRequest.Builder(JobApplierJob.TAG)
-                        .setPeriodic(TimeUnit.MINUTES.toMillis(15))
+                        .setPeriodic(TimeUnit.MINUTES.toMillis(15)) //TODO: Set back to 24 hours
                         .setUpdateCurrent(true)
                         .setRequiredNetworkType(JobRequest.NetworkType.CONNECTED)
                         .setRequirementsEnforced(true)

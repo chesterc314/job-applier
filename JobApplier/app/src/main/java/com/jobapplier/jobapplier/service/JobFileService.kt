@@ -15,7 +15,7 @@ object JobFileService {
         val jobEntriesContent = jobResult.jobEntries
                 .map { "${it.username},${it.jobLink},${it.location},${it.cvPath},${it.toEmailAddress},${it.jobLink}\n" }
                 .fold("") { acc, it -> "$acc$it" }
-        FileService.writeFile(jobEntriesContent, FileNames.JOB_ERROR_LOG, destinationFilePath)
+        FileService.writeFile(jobEntriesContent, FileNames.JOB_ENTRIES, destinationFilePath)
     }
 
     fun readFromJobEntriesFile(destinationFilePath: String): List<JobEntry>{

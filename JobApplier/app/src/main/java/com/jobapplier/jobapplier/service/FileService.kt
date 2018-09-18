@@ -6,7 +6,12 @@ import java.io.FileWriter
 
 object FileService {
     fun writeFile(content: String, fileName: String, destinationFilePath: String, overrideFile: Boolean = false): File {
-        val file = File("$destinationFilePath$fileName")
+        val directory = File(destinationFilePath)
+        if(!directory.exists()){
+            directory.mkdir()
+        }
+
+        val file = File("$destinationFilePath/$fileName")
         val fileWriter = FileWriter(file)
         if (file.exists() && !overrideFile) {
             fileWriter.append(content)
