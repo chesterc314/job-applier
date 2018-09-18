@@ -1,0 +1,75 @@
+<resources>
+    <string name="app_name">Job Applier</string>
+    <string name="job_applier">Turn On Job Applier</string>
+    <string-array name="location_array">
+        <item>CHOOSE A LOCATION</item>
+        <item>BALLITO</item>
+        <item>BARBERTON</item>
+        <item>BELA BELA</item>
+        <item>BLOEMFONTEIN</item>
+        <item>BLOUBERG</item>
+        <item>BO KAROO</item>
+        <item>BOLAND</item>
+        <item>BRITS</item>
+        <item>CAPE TOWN</item>
+        <item>CAPRICORN</item>
+        <item>DELMAS</item>
+        <item>DRAKENSBERG</item>
+        <item>DURBAN</item>
+        <item>EAST LONDON</item>
+        <item>EMALAHLENI</item>
+        <item>EMPANGENI</item>
+        <item>ERMELO</item>
+        <item>FRONTIER COUNTRY</item>
+        <item>GARDEN ROUTE</item>
+        <item>GRAHAMSTOWN</item>
+        <item>HARTBEESPOORT</item>
+        <item>JEFFREYS BAY</item>
+        <item>JOHANNESBURG</item>
+        <item>KALAHARI</item>
+        <item>KAROO HARTLAND</item>
+        <item>KIMBERLEY</item>
+        <item>KLERKSDORP</item>
+        <item>KROONSTAD</item>
+        <item>LEPHALALE</item>
+        <item>LICHTENBURG</item>
+        <item>MAFIKENG</item>
+        <item>MIDDELBURG</item>
+        <item>MOKOPANE</item>
+        <item>MTHATHA</item>
+        <item>NAMAQUALAND</item>
+        <item>NATAL MIDLANDS</item>
+        <item>NELSPRUIT</item>
+        <item>NORTH COAST</item>
+        <item>OLIFANTSRIVER</item>
+        <item>OVERBERG</item>
+        <item>PARYS</item>
+        <item>PIETERMARITZBURG</item>
+        <item>POLOKWANE</item>
+        <item>PORT ELIZABETH</item>
+        <item>POTCHEFSTROOM</item>
+        <item>PRETORIA</item>
+        <item>RICHARDS BAY</item>
+        <item>RUSTENBURG</item>
+        <item>SASOLBURG</item>
+        <item>SECUNDA</item>
+        <item>SOUTH COAST</item>
+        <item>SOUTPANSBERG</item>
+        <item>STANDERTON</item>
+        <item>STANGER</item>
+        <item>SUNSHINE COAST</item>
+        <item>TZANEEN</item>
+        <item>UITENHAGE</item>
+        <item>UPINGTON</item>
+        <item>VALLEY OF THE OLIFANTS</item>
+        <item>VIRGINIA</item>
+        <item>VRYBURG</item>
+        <item>WATERBERG</item>
+        <item>WELKOM</item>
+        <item>WEST COAST</item>
+        <item>WHITE RIVER</item>
+        <item>WILD COAST</item>
+        <item>WORCESTER</item>
+        <item>ZULULAND</item>
+    </string-array>
+</resources>
