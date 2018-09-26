@@ -38,18 +38,12 @@ class JobApplierJob : Job() {
                 MessageTemplate.JOB_MESSAGE_TEMPLATE
         )
         val destinationFilePath = extras.getString("filePath", "")
-        val oldJobEntries = JobFileService.readFromJobEntriesFile(destinationFilePath)
+        val oldJobEntries = JobFileService.readFromJobEntriesFile(destinationFilePath).distinctBy { it.jobLink }
         val jobResult = com.jobapplier.jobapplier.service.JobService.apply(application, oldJobEntries)
-        when (jobResult) {
-            is Failure -> {
-                JobFileService.writeToErrorLogFile(jobResult, destinationFilePath)
-                JobFileService.writeToJobEntriesFile(jobResult, destinationFilePath)
-            }
-            else -> {
-                JobFileService.writeToJobEntriesFile(jobResult, destinationFilePath)
-            }
+        if (jobResult is Failure) {
+            JobFileService.writeToErrorLogFile(jobResult, destinationFilePath)
         }
-
+        JobFileService.writeToJobEntriesFile(jobResult, destinationFilePath)
         return Job.Result.SUCCESS
     }
 
@@ -66,7 +60,7 @@ class JobApplierJob : Job() {
                 null
             } else {
                 JobRequest.Builder(JobApplierJob.TAG)
-                        .setPeriodic(TimeUnit.MINUTES.toMillis(15)) //TODO: Set back to 24 hours
+                        .setPeriodic(TimeUnit.DAYS.toMillis(1))
                         .setUpdateCurrent(true)
                         .setRequiredNetworkType(JobRequest.NetworkType.CONNECTED)
                         .setRequirementsEnforced(true)

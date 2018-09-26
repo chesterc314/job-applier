@@ -29,13 +29,16 @@ object JobService {
             listOf<Job>()
         }
 
-        jobs.forEach { it ->
+        val newJobApplications = jobs.filter {
+            !oldJobEntries.any { job -> job.username == application.email && job.jobLink == it.link && job.toEmailAddress == it.email }
+        }
+        newJobApplications.forEach { it ->
             val jobEntry = JobEntry(application.email, application.jobTitle, application.location, application.cvFilePath, it.email, it.link)
             val displayName = "${application.firstName} ${application.lastName}"
             val subject = application.messageSubject.replace("{displayName}", displayName)
             val fileName = "$subject.pdf"
             val emailMessage = EmailMessage(
-                    toAddress = "cacobus15@gmail.com", //TODO: Remove this before releasing to play store: it.email
+                    toAddress = it.email,
                     subject = subject,
                     message = application.messageTemplate
                             .replace("{jobLink}", it.link)
@@ -44,23 +47,18 @@ object JobService {
                             .replace("{displayName}", displayName),
                     attachment = Attachment(fileName, application.cvFilePath)
             )
-
-            if(!oldJobEntries.any { it.username == jobEntry.username &&
-                                    it.jobLink == jobEntry.jobLink &&
-                                    it.toEmailAddress == jobEntry.toEmailAddress }) {
-                try {
-                    EmailService.sendEmail(application.email, application.password, emailMessage)
-                    jobEntries.add(jobEntry)
-                } catch (auth: AuthenticationFailedException) {
-                    val additionalInfo =
-                            "Error with email authentication Your Email: ${application.email}." +
-                                    "Please check that your email and password is correct or please enable less secure applications here: https://www.google.com/settings/security/lesssecureapps"
-                    errors.add(JobErrorMessage(it.link, it.email, additionalInfo))
-                    jobEntries.remove(jobEntry)
-                } catch (e: Exception) {
-                    errors.add(JobErrorMessage(it.link, it.email, "Error sending email for this job. Your Email: ${application.email} and CV path: ${application.cvFilePath}"))
-                    jobEntries.remove(jobEntry)
-                }
+            try {
+                EmailService.sendEmail(application.email, application.password, emailMessage)
+                jobEntries.add(jobEntry)
+            } catch (auth: AuthenticationFailedException) {
+                val additionalInfo =
+                        "Error with email authentication Your Email: ${application.email}." +
+                                "Please check that your email and password is correct or please enable less secure applications here: https://www.google.com/settings/security/lesssecureapps"
+                errors.add(JobErrorMessage(it.link, it.email, additionalInfo))
+                jobEntries.remove(jobEntry)
+            } catch (e: Exception) {
+                errors.add(JobErrorMessage(it.link, it.email, "Error sending email for this job. Your Email: ${application.email} and CV path: ${application.cvFilePath}"))
+                jobEntries.remove(jobEntry)
             }
         }
 

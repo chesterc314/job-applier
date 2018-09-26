@@ -2,25 +2,31 @@ package com.jobapplier.jobapplier.service
 
 import com.jobapplier.jobapplier.model.FileNames
 import java.io.File
+import java.lang.StringBuilder
 
 object JobFileService {
     fun writeToErrorLogFile(jobResult: Failure, destinationFilePath: String) {
-        val messages = jobResult.errorMessages
-                .map { "${it.errorMessage},${it.additionalInfo}\n" }
-                .fold("") { acc, it -> "$acc$it" }
-        FileService.writeFile(messages, FileNames.JOB_ERROR_LOG, destinationFilePath, true)
+        val builder = StringBuilder()
+        jobResult.errorMessages.forEach {
+            builder.appendln("${it.errorMessage},${it.additionalInfo}")
+        }
+        FileService.writeFile(builder.toString(), FileNames.JOB_ERROR_LOG, destinationFilePath, true)
     }
 
     fun writeToJobEntriesFile(jobResult: JobResult, destinationFilePath: String) {
-        val jobEntriesContent = jobResult.jobEntries
-                .map { "${it.username},${it.jobLink},${it.location},${it.cvPath},${it.toEmailAddress},${it.jobLink}\n" }
-                .fold("") { acc, it -> "$acc$it" }
-        FileService.writeFile(jobEntriesContent, FileNames.JOB_ENTRIES, destinationFilePath)
+        if(jobResult.jobEntries.isEmpty()){
+            return
+        }
+        val builder = StringBuilder()
+        jobResult.jobEntries.forEach {
+            builder.appendln("${it.username},${it.jobLink},${it.location},${it.cvPath},${it.toEmailAddress},${it.jobLink}")
+        }
+        FileService.writeFile(builder.toString(), FileNames.JOB_ENTRIES, destinationFilePath)
     }
 
-    fun readFromJobEntriesFile(destinationFilePath: String): List<JobEntry>{
-        val filePath = "$destinationFilePath${FileNames.JOB_ENTRIES}"
-        if(File(filePath).exists()) {
+    fun readFromJobEntriesFile(destinationFilePath: String): List<JobEntry> {
+        val filePath = "$destinationFilePath/${FileNames.JOB_ENTRIES}"
+        if (File(filePath).exists()) {
             val lines = FileService.readFile(filePath)
             return lines.map { it ->
                 val parts = it.split(",")
@@ -33,7 +39,7 @@ object JobFileService {
                         parts[5]
                 )
             }
-        }else{
+        } else {
             return listOf()
         }
     }
