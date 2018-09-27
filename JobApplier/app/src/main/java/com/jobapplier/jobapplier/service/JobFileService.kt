@@ -14,7 +14,7 @@ object JobFileService {
     }
 
     fun writeToJobEntriesFile(jobResult: JobResult, destinationFilePath: String) {
-        if(jobResult.jobEntries.isEmpty()){
+        if (jobResult.jobEntries.isEmpty()) {
             return
         }
         val builder = StringBuilder()

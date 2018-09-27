@@ -12,12 +12,14 @@ object FileService {
         }
 
         val file = File("$destinationFilePath/$fileName")
-        val fileWriter = FileWriter(file)
-        if (file.exists() && !overrideFile) {
+        val isAppendable = file.exists() && !overrideFile
+        val fileWriter = FileWriter(file, isAppendable)
+        if (isAppendable) {
             fileWriter.append(content)
         } else {
             fileWriter.write(content)
         }
+        fileWriter.flush()
         fileWriter.close()
         return file
     }
