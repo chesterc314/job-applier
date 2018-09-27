@@ -7,10 +7,10 @@
 * This will run daily.
 
 # Terms and Conditions
-* **This application can only use your job title to send applications, it is not smart enough to look at the job description like for instance salary/wages or whether you need a car. Look at your gmail inbox daily to see whether you have an interview or a follow-up email.
-* **Use this application at your OWN RISK. 
-* **It is free and open source.
-* **This is a BETA version so it might be buggy.
+* **This application can only use your job title to send applications, it is not smart enough to look at the job description like for instance salary/wages or whether you need a car. Look at your gmail inbox daily to see whether you have an interview or a follow-up email.**
+* **Use this application at your OWN RISK.**
+* **It is free and open source.**
+* **This is a BETA version so it might be buggy.**
 
 # Installation
 * Download APK (https://github.com/chesterc314/job-applier/raw/master/JobApplier/app/release/app-release.apk).
