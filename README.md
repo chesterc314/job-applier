@@ -8,8 +8,7 @@
 # Installation
 * Download APK (https://github.com/chesterc314/job-applier/raw/master/JobApplier/app/release/app-release.apk).
 * Enable install from "Unknown sources" in settings on your Android device.
-* Open application, enter all your details (your password is stored locally on your device). (Please enable less secure applications here: https://www.google.com/settings/security/lesssecureapps)
-*Note: it uses only gmail credit*
+* Open application, enter all your details (your password is stored locally on your device *Note: it uses only gmail credentials for now*). (Please enable less secure applications here: https://www.google.com/settings/security/lesssecureapps)
 * Switch on job applier (please be aware as soon as you switch it on, it will start applying to jobs immediately then after it will run again within 24 hours).
 * It will apply for jobs daliy. 
 
