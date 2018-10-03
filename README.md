@@ -9,7 +9,7 @@
 # Terms and Conditions
 * **This application can only use your job title to send applications, it is not smart enough to look at the job description like for instance salary/wages or whether you need a car. Look at your gmail inbox daily to see whether you have an interview or a follow-up email.**
 * **Use this application at your OWN RISK.**
-* **It is free and open source.**
+* **It is free and open source under GNU General Public License v3.0 (https://github.com/chesterc314/job-applier/blob/master/LICENSE).**
 * **This is a BETA version so it might be buggy.**
 
 # Installation
