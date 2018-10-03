@@ -7,7 +7,7 @@ import org.jsoup.nodes.Document
 data class Job(val email: String, val link: String)
 
 object JobScraperService {
-    const val USER_AGENT = "Mozilla/5.0 (Windows NT 6.1; WOW64; rv:40.0) Gecko/20100101 Firefox/40.1"
+    private const val USER_AGENT = "Mozilla/5.0 (Windows NT 6.1; WOW64; rv:40.0) Gecko/20100101 Firefox/40.1"
     fun getJobs(jobTitle: String, location: String): List<Job> {
         fun addJobs(document: Document): List<Job> {
             fun extractEmail(jobDescription: String): String {

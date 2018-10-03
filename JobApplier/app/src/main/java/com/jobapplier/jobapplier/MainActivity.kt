@@ -150,7 +150,6 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
     }
 
     override fun onClick(view: View?) {
-        setValuesFromView()
         saveJobDataToSharedPreferences()
         askForPermission(Manifest.permission.READ_EXTERNAL_STORAGE, REQUEST_READ_PERMISSION_BROWSER) {
             browserPdfFiles()
@@ -173,7 +172,6 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
                 val path = getPath(this, resultData.data!!)
                 path?.let { it ->
                     this.cvPath = it
-                    setValuesFromView()
                     saveJobDataToSharedPreferences()
                 }
             }
@@ -262,6 +260,7 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
     }
 
     private fun saveJobDataToSharedPreferences() {
+        setValuesFromView()
         with(privateSharedPrefs.edit()) {
             values.forEach { it ->
                 putString(it.key, it.value)
