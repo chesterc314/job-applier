@@ -1,6 +1,14 @@
 <resources>
     <string name="app_name">Job Applier</string>
-    <string name="job_applier">Turn On Job Applier</string>
+    <string name="browser">Browser</string>
+    <string name="pdf_c_v_file">.PDF C.V. File</string>
+    <string name="password_for_gmail">Password for gmail</string>
+    <string name="email_e_g_bobsmith_gmail_com">Email e.g. bobsmith@gmail.com</string>
+    <string name="cell_phone_number_e_g_0821230000">Cell Phone Number e.g. 0821230000</string>
+    <string name="last_name_e_g_smith">Last Name e.g. Smith</string>
+    <string name="first_name_e_g_bob">First Name e.g. Bob</string>
+    <string name="job_title_e_g_cashier">Job Title e.g. Cashier</string>
+    <string name="action_rate">Rate</string>
     <string-array name="location_array">
         <item>CHOOSE A LOCATION</item>
         <item>BALLITO</item>

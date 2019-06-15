@@ -19,7 +19,7 @@ data class Success(override val jobEntries: List<JobEntry>) : JobResult(jobEntri
 data class Failure(val errorMessages: List<ErrorMessage>, override val jobEntries: List<JobEntry>) : JobResult(jobEntries)
 
 object JobService {
-    fun apply(application: ApplicationModel, oldJobEntries: List<JobEntry>): JobResult {
+    fun apply(application: ApplicationModel, oldJobEntries: List<JobEntry>, errorAction: (Failure) -> Unit, successAction: (JobResult) -> Unit): JobResult {
         val errors = ArrayList<ErrorMessage>()
         val jobEntries = ArrayList<JobEntry>()
         val jobs = try {
@@ -32,7 +32,7 @@ object JobService {
         val newJobApplications = jobs.filter {
             !oldJobEntries.any { job -> job.username == application.email && job.jobLink == it.link && job.toEmailAddress == it.email }
         }
-        newJobApplications.forEach { it ->
+        newJobApplications.forEach {
             val jobEntry = JobEntry(application.email, application.jobTitle, application.location, application.cvFilePath, it.email, it.link)
             val displayName = "${application.firstName} ${application.lastName}"
             val subject = application.messageSubject.replace("{displayName}", displayName)
@@ -53,7 +53,7 @@ object JobService {
             } catch (auth: AuthenticationFailedException) {
                 val additionalInfo =
                         "Error with email authentication Your Email: ${application.email}." +
-                                "Please check that your email and password is correct or please enable less secure applications here: https://www.google.com/settings/security/lesssecureapps"
+                                "Please check that your email and password is correct or please enable less secure applications on your Gmail account, here: https://www.google.com/settings/security/lesssecureapps"
                 errors.add(JobErrorMessage(it.link, it.email, additionalInfo))
                 jobEntries.remove(jobEntry)
             } catch (e: Exception) {
@@ -63,9 +63,14 @@ object JobService {
         }
 
         return if (errors.isNotEmpty()) {
-            Failure(errors, jobEntries)
+            val failure = Failure(errors, jobEntries)
+            errorAction(failure)
+            successAction(failure)
+            failure
         } else {
-            Success(jobEntries)
+            val success = Success(jobEntries)
+            successAction(success)
+            success
         }
     }
 }

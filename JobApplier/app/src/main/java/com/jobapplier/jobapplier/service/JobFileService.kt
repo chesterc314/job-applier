@@ -28,7 +28,7 @@ object JobFileService {
         val filePath = "$destinationFilePath/${FileNames.JOB_ENTRIES}"
         if (File(filePath).exists()) {
             val lines = FileService.readFile(filePath)
-            return lines.map { it ->
+            return lines.map {
                 val parts = it.split(",")
                 JobEntry(
                         parts[0],

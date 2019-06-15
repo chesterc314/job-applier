@@ -2,14 +2,10 @@ package com.jobapplier.jobapplier
 
 import android.Manifest
 import android.app.Activity
-import android.content.ContentUris
-import android.content.Context
-import android.content.Intent
-import android.content.SharedPreferences
+import android.content.*
 import android.content.pm.PackageManager
 import android.database.Cursor
 import android.net.Uri
-import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.DocumentsContract
@@ -18,11 +14,15 @@ import android.support.v4.app.ActivityCompat
 import android.support.v4.content.ContextCompat
 import android.support.v7.app.AlertDialog
 import android.support.v7.app.AppCompatActivity
+import android.view.Menu
+import android.view.MenuItem
 import android.view.View
 import android.widget.*
-import com.evernote.android.job.JobManager
-import com.jobapplier.jobapplier.worker.JobApplierJob
-import com.jobapplier.jobapplier.worker.JobApplierJobCreator
+import com.jobapplier.jobapplier.service.Failure
+import com.jobapplier.jobapplier.service.JobApplier
+import com.jobapplier.jobapplier.service.Success
+import kotlinx.android.synthetic.main.activity_main.*
+import java.lang.StringBuilder
 
 
 class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, View.OnClickListener {
@@ -35,10 +35,8 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
     private lateinit var email: EditText
     private lateinit var password: EditText
     private lateinit var btnFileBrowser: Button
-    private lateinit var jobSwitch: Switch
     private lateinit var txtCVPath: TextView
-    private var jobId: Int? = null
-    private var isOn: Boolean = false
+    private var applyDate: Long = 0L
     private var location: String = ""
     private var cvPath = ""
     private var position: Int = 0
@@ -48,6 +46,7 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+        setSupportActionBar(toolbar)
         privateSharedPrefs = getSharedPreferences(JOB_APPLIER_SHARED_KEY, Context.MODE_PRIVATE)
         jobTitle = findViewById(R.id.jobTitle)
         locationSpinner = findViewById(R.id.locationSpinner)
@@ -57,7 +56,6 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
         email = findViewById(R.id.email)
         password = findViewById(R.id.password)
         btnFileBrowser = findViewById(R.id.btnFileBrowser)
-        jobSwitch = findViewById(R.id.jobSwitch)
         txtCVPath = findViewById(R.id.txtCVPath)
         val locationAdapter = ArrayAdapter.createFromResource(this,
                 R.array.location_array,
@@ -66,15 +64,12 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
         locationSpinner.adapter = locationAdapter
         locationSpinner.onItemSelectedListener = this
         btnFileBrowser.setOnClickListener(this)
-        jobSwitch.setOnCheckedChangeListener { _, isOn ->
-            if (isOn) {
-                askForPermission(Manifest.permission.READ_EXTERNAL_STORAGE, REQUEST_READ_PERMISSION_JOB) {
-                    askForPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE, REQUEST_WRITE_PERMISSION) {
-                        startJob()
-                    }
-                }
-            } else {
-                jobId?.let { it -> cancelJob(it) }
+    }
+
+    private fun askForPermissionAndApply() {
+        askForPermission(Manifest.permission.READ_EXTERNAL_STORAGE, REQUEST_READ_PERMISSION_JOB) {
+            askForPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE, REQUEST_WRITE_PERMISSION) {
+                applyForJobPosition()
             }
         }
     }
@@ -82,14 +77,12 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
     override fun onStart() {
         readJobDataFromSharedPreferences()
         updateViewWithData()
-        updateViewElementsStatus(!isOn)
         super.onStart()
     }
 
     override fun onResume() {
         readJobDataFromSharedPreferences()
         updateViewWithData()
-        updateViewElementsStatus(!isOn)
         super.onResume()
     }
 
@@ -108,15 +101,51 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
         if (ActivityCompat.checkSelfPermission(this, permissions[0]) == PackageManager.PERMISSION_GRANTED) {
             when (requestCode) {
                 REQUEST_READ_PERMISSION_JOB -> askForPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE, REQUEST_WRITE_PERMISSION) {
-                    startJob()
+                    applyForJobPosition()
                 }
                 REQUEST_READ_PERMISSION_BROWSER -> browserPdfFiles()
-                REQUEST_WRITE_PERMISSION -> startJob()
+                REQUEST_WRITE_PERMISSION -> applyForJobPosition()
             }
             Toast.makeText(this, "Permission granted", Toast.LENGTH_SHORT).show()
         } else {
             Toast.makeText(this, "Permission denied", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    override fun onCreateOptionsMenu(menu: Menu): Boolean {
+        menuInflater.inflate(R.menu.menu, menu)
+        return true
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            R.id.action_rate -> {
+                rateApp()
+                true
+            }
+            else -> super.onOptionsItemSelected(item)
+        }
+    }
+
+    private fun rateApp() {
+        val uri = Uri.parse("market://details?id=$packageName")
+        val goToMarket = Intent(Intent.ACTION_VIEW, uri)
+        goToMarket.addFlags(
+                Intent.FLAG_ACTIVITY_NO_HISTORY or
+                        Intent.FLAG_ACTIVITY_NEW_DOCUMENT or
+                        Intent.FLAG_ACTIVITY_MULTIPLE_TASK
+        )
+        try {
+            startActivity(goToMarket)
+        } catch (e: ActivityNotFoundException) {
+            startActivity(
+                    Intent(
+                            Intent.ACTION_VIEW,
+                            Uri.parse("http://play.google.com/store/apps/details?id=$packageName")
+                    )
+            )
+        }
+
     }
 
     private fun askForPermission(permission: String, requestCode: Int?, action: () -> Unit) {
@@ -179,8 +208,7 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
     }
 
     private fun getPath(context: Context, uri: Uri): String? {
-        val isKitKat = Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT
-        if (isKitKat && DocumentsContract.isDocumentUri(context, uri)) {
+        if (DocumentsContract.isDocumentUri(context, uri)) {
             if (isExternalStorageDocument(uri)) {
                 val docId = DocumentsContract.getDocumentId(uri)
                 val split = docId.split(":".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
@@ -262,31 +290,28 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
     private fun saveJobDataToSharedPreferences() {
         setValuesFromView()
         with(privateSharedPrefs.edit()) {
-            values.forEach { it ->
+            values.forEach {
                 putString(it.key, it.value)
             }
-            jobId?.let { it -> putInt(JOB_APPLIER_JOB_ID, it) }
-            putBoolean(JOB_APPLIER_IS_ON, isOn)
+            putLong(JOB_APPLIER_APPLY_DATE, applyDate)
             putInt(JOB_APPLIER_LOCATION_POS_ID, position)
             apply()
         }
     }
 
     private fun readJobDataFromSharedPreferences() {
-        privateSharedPrefs.all.forEach { key, value ->
+        privateSharedPrefs.all.forEach { (key, value) ->
             when (value) {
                 is String -> {
                     this.values[key] = value
                 }
                 is Int -> {
-                    if (key == JOB_APPLIER_JOB_ID) {
-                        this.jobId = value
-                    } else if (key == JOB_APPLIER_LOCATION_POS_ID) {
+                    if (key == JOB_APPLIER_LOCATION_POS_ID) {
                         this.position = value
                     }
                 }
-                is Boolean -> {
-                    this.isOn = value
+                is Long -> {
+                    this.applyDate = value
                 }
             }
         }
@@ -303,17 +328,9 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
         this.cvPath = values["cvFilePath"] ?: ""
         this.txtCVPath.text = this.cvPath
         this.password.setText(values["password"])
-        this.jobSwitch.isChecked = isOn
     }
 
-    private fun cancelJob(jobId: Int) {
-        JobManager.instance().cancel(jobId)
-        isOn = false
-        updateViewElementsStatus(!isOn)
-        saveJobDataToSharedPreferences()
-    }
-
-    private fun startJob() {
+    private fun applyForJobPosition() {
         setValuesFromView()
         val valuesNotFilledIn = values.filter { (_, value) -> value.isEmpty() || value.isBlank() }
                 .keys.fold("") { acc, value ->
@@ -324,10 +341,36 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
             return
         }
         values["filePath"] = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS).absolutePath
-        isOn = true
-        JobManager.create(application).addJobCreator(JobApplierJobCreator())
-        jobId = JobApplierJob.scheduleJob(values)
-        updateViewElementsStatus(!isOn)
+        updateViewElementsStatus(isEnabled = false)
+        when (val result = JobApplier.applyForJob(values)) {
+            is Success -> {
+                updateViewElementsStatus(isEnabled = true)
+            }
+            is Failure -> {
+                updateViewElementsStatus(isEnabled = false)
+                val builder = StringBuilder()
+                result.errorMessages.forEach {
+                    builder.appendln("${it.errorMessage},${it.additionalInfo}")
+                }
+                val linearLayout = LinearLayout(this)
+                val scrollView = ScrollView(this)
+                val alertDialogBuilder = AlertDialog.Builder(this)
+                linearLayout.orientation = LinearLayout.VERTICAL
+                linearLayout.isVerticalScrollBarEnabled = true
+                val textView = TextView(this)
+                textView.text = builder.toString()
+                linearLayout.addView(textView)
+                scrollView.addView(linearLayout)
+                alertDialogBuilder.setView(scrollView)
+                alertDialogBuilder
+                        .setCancelable(false)
+                        .setPositiveButton("OK") { dialog, _ ->
+                            dialog.dismiss()
+                        }
+                val alertDialog = alertDialogBuilder.create()
+                alertDialog.show()
+            }
+        }
         saveJobDataToSharedPreferences()
     }
 
@@ -360,8 +403,7 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
         const val REQUEST_WRITE_PERMISSION = 3
         const val READ_REQUEST_CODE = 65
         const val JOB_APPLIER_SHARED_KEY = "com.jobapplier.jobapplier.JOB_APPLIER_SHARED_KEY"
-        const val JOB_APPLIER_IS_ON = "com.jobapplier.jobapplier.IS_ON"
-        const val JOB_APPLIER_JOB_ID = "com.jobapplier.jobapplier.JOB_ID"
+        const val JOB_APPLIER_APPLY_DATE = "com.jobapplier.jobapplier.APPLY_DATE"
         const val JOB_APPLIER_LOCATION_POS_ID = "com.jobapplier.jobapplier.LOCATION_POS_ID"
     }
 }
