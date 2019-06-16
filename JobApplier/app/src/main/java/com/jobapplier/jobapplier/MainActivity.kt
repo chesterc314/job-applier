@@ -18,15 +18,19 @@ import android.view.Menu
 import android.view.MenuItem
 import android.view.View
 import android.widget.*
+import com.google.android.gms.ads.AdRequest
+import com.google.android.gms.ads.AdView
+import com.google.android.gms.ads.MobileAds
+import com.google.android.gms.ads.reward.RewardItem
+import com.google.android.gms.ads.reward.RewardedVideoAd
+import com.google.android.gms.ads.reward.RewardedVideoAdListener
 import com.jobapplier.jobapplier.service.Failure
 import com.jobapplier.jobapplier.service.JobApplier
 import com.jobapplier.jobapplier.service.Success
 import kotlinx.android.synthetic.main.activity_main.*
-import java.lang.StringBuilder
 
 
-class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, View.OnClickListener {
-
+class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, View.OnClickListener, RewardedVideoAdListener {
     private lateinit var jobTitle: AutoCompleteTextView
     private lateinit var locationSpinner: Spinner
     private lateinit var firstName: EditText
@@ -42,6 +46,9 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
     private var position: Int = 0
     private val values = HashMap<String, String>()
     private lateinit var privateSharedPrefs: SharedPreferences
+    private lateinit var adView: AdView
+    private lateinit var mRewardedVideoAd: RewardedVideoAd
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -57,6 +64,7 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
         password = findViewById(R.id.password)
         btnFileBrowser = findViewById(R.id.btnFileBrowser)
         txtCVPath = findViewById(R.id.txtCVPath)
+        adView = findViewById(R.id.adView)
         val locationAdapter = ArrayAdapter.createFromResource(this,
                 R.array.location_array,
                 android.R.layout.simple_spinner_item)
@@ -64,6 +72,43 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
         locationSpinner.adapter = locationAdapter
         locationSpinner.onItemSelectedListener = this
         btnFileBrowser.setOnClickListener(this)
+
+        MobileAds.initialize(this, getString(R.string.admob_jobapplier_app_id))
+        val adRequest = AdRequest.Builder().build()
+        adView.loadAd(adRequest)
+        mRewardedVideoAd = MobileAds.getRewardedVideoAdInstance(this)
+        mRewardedVideoAd.rewardedVideoAdListener = this
+    }
+
+    fun applyNow(v: View) {
+        loadRewardedVideoAd()
+        val alertDialogBuilder = AlertDialog.Builder(this)
+        alertDialogBuilder
+                .setCancelable(false)
+                .setMessage("Watch a short video ad to send out your C.V.")
+                .setPositiveButton("Continue") { dialog, _ ->
+                    showRewardedAd()
+                    dialog.dismiss()
+                }
+                .setNegativeButton("Cancel"
+                ) { dialog, _ ->
+                    dialog.cancel()
+                }
+
+        val alertDialog = alertDialogBuilder.create()
+        alertDialog.show()
+
+    }
+
+    private fun showRewardedAd() {
+        if (mRewardedVideoAd.isLoaded) {
+            mRewardedVideoAd.show()
+        }
+    }
+
+    private fun loadRewardedVideoAd() {
+        mRewardedVideoAd.loadAd(getString(R.string.admob_jobapplier_reward_ad_unit_id),
+                AdRequest.Builder().build())
     }
 
     private fun askForPermissionAndApply() {
@@ -84,16 +129,48 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
         readJobDataFromSharedPreferences()
         updateViewWithData()
         super.onResume()
+        mRewardedVideoAd.resume(this)
     }
 
     override fun onPause() {
         saveJobDataToSharedPreferences()
         super.onPause()
+        mRewardedVideoAd.pause(this)
     }
 
     override fun onStop() {
         saveJobDataToSharedPreferences()
         super.onStop()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        mRewardedVideoAd.destroy(this)
+    }
+
+    override fun onRewardedVideoAdLoaded() {
+    }
+
+    override fun onRewardedVideoAdOpened() {
+    }
+
+    override fun onRewardedVideoCompleted() {
+    }
+
+    override fun onRewarded(p0: RewardItem?) {
+        askForPermissionAndApply()
+    }
+
+    override fun onRewardedVideoStarted() {
+    }
+
+    override fun onRewardedVideoAdFailedToLoad(p0: Int) {
+    }
+
+    override fun onRewardedVideoAdLeftApplication() {
+    }
+
+    override fun onRewardedVideoAdClosed() {
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
