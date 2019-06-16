@@ -5,11 +5,13 @@ import android.app.Activity
 import android.content.*
 import android.content.pm.PackageManager
 import android.database.Cursor
+import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
 import android.provider.DocumentsContract
 import android.provider.MediaStore
+import android.support.design.widget.Snackbar
 import android.support.v4.app.ActivityCompat
 import android.support.v4.content.ContextCompat
 import android.support.v7.app.AlertDialog
@@ -26,7 +28,9 @@ import com.google.android.gms.ads.reward.RewardedVideoAd
 import com.google.android.gms.ads.reward.RewardedVideoAdListener
 import com.jobapplier.jobapplier.service.Failure
 import com.jobapplier.jobapplier.service.JobApplier
+import com.jobapplier.jobapplier.service.JobResult
 import com.jobapplier.jobapplier.service.Success
+import com.robertlevonyan.views.customfloatingactionbutton.FloatingActionButton
 import kotlinx.android.synthetic.main.activity_main.*
 
 
@@ -48,6 +52,7 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
     private lateinit var privateSharedPrefs: SharedPreferences
     private lateinit var adView: AdView
     private lateinit var mRewardedVideoAd: RewardedVideoAd
+    private lateinit var floatingActionButton: FloatingActionButton
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -65,6 +70,7 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
         btnFileBrowser = findViewById(R.id.btnFileBrowser)
         txtCVPath = findViewById(R.id.txtCVPath)
         adView = findViewById(R.id.adView)
+        floatingActionButton = findViewById(R.id.floatingActionButton)
         val locationAdapter = ArrayAdapter.createFromResource(this,
                 R.array.location_array,
                 android.R.layout.simple_spinner_item)
@@ -72,37 +78,52 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
         locationSpinner.adapter = locationAdapter
         locationSpinner.onItemSelectedListener = this
         btnFileBrowser.setOnClickListener(this)
-
         MobileAds.initialize(this, getString(R.string.admob_jobapplier_app_id))
         val adRequest = AdRequest.Builder().build()
         adView.loadAd(adRequest)
         mRewardedVideoAd = MobileAds.getRewardedVideoAdInstance(this)
         mRewardedVideoAd.rewardedVideoAdListener = this
+        loadRewardedVideoAd()
     }
 
     fun applyNow(v: View) {
-        loadRewardedVideoAd()
-        val alertDialogBuilder = AlertDialog.Builder(this)
-        alertDialogBuilder
-                .setCancelable(false)
-                .setMessage("Watch a short video ad to send out your C.V.")
-                .setPositiveButton("Continue") { dialog, _ ->
-                    showRewardedAd()
-                    dialog.dismiss()
-                }
-                .setNegativeButton("Cancel"
-                ) { dialog, _ ->
-                    dialog.cancel()
-                }
+        if(v.isEnabled) {
+            setValuesFromView()
+            val valuesNotFilledIn = values.filter { (_, value) -> value.isEmpty() || value.isBlank() }
+                    .keys.fold("") { acc, value ->
+                "$acc$value\n"
+            }
+            if (valuesNotFilledIn.isNotEmpty()) {
+                Snackbar.make(adView, "Please complete the following:\n$valuesNotFilledIn", Snackbar.LENGTH_LONG)
+                        .setActionTextColor(Color.RED)
+                        .setAction("View details") { viewPopup("Please enter the following:\n$valuesNotFilledIn") }
+                        .show()
+                return
+            }
+            val alertDialogBuilder = AlertDialog.Builder(this)
+            alertDialogBuilder
+                    .setCancelable(false)
+                    .setMessage("Watch a short video ad to send out your C.V.")
+                    .setPositiveButton("Continue") { dialog, _ ->
+                        showRewardedAd()
+                        dialog.dismiss()
+                    }
+                    .setNegativeButton("Cancel"
+                    ) { dialog, _ ->
+                        dialog.cancel()
+                    }
 
-        val alertDialog = alertDialogBuilder.create()
-        alertDialog.show()
+            val alertDialog = alertDialogBuilder.create()
+            alertDialog.show()
+        }
 
     }
 
     private fun showRewardedAd() {
         if (mRewardedVideoAd.isLoaded) {
             mRewardedVideoAd.show()
+        } else {
+            Snackbar.make(adView, "Ad not loaded", Snackbar.LENGTH_LONG).show()
         }
     }
 
@@ -180,7 +201,7 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
                 REQUEST_READ_PERMISSION_JOB -> askForPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE, REQUEST_WRITE_PERMISSION) {
                     applyForJobPosition()
                 }
-                REQUEST_READ_PERMISSION_BROWSER -> browserPdfFiles()
+                REQUEST_READ_PERMISSION_BROWSER -> browserDocumentFiles()
                 REQUEST_WRITE_PERMISSION -> applyForJobPosition()
             }
             Toast.makeText(this, "Permission granted", Toast.LENGTH_SHORT).show()
@@ -258,16 +279,17 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
     override fun onClick(view: View?) {
         saveJobDataToSharedPreferences()
         askForPermission(Manifest.permission.READ_EXTERNAL_STORAGE, REQUEST_READ_PERMISSION_BROWSER) {
-            browserPdfFiles()
+            browserDocumentFiles()
         }
     }
 
-    private fun browserPdfFiles() {
+    private fun browserDocumentFiles() {
         val intent = Intent(Intent.ACTION_GET_CONTENT)
         intent.addCategory(Intent.CATEGORY_OPENABLE)
         intent.type = "*/*"
-        val mimeTypes = arrayOf("application/pdf")
+        val mimeTypes = arrayOf("application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
         intent.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes)
+        intent.putExtra(Intent.EXTRA_LOCAL_ONLY, true)
         startActivityForResult(intent, READ_REQUEST_CODE)
     }
 
@@ -408,47 +430,59 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
     }
 
     private fun applyForJobPosition() {
-        setValuesFromView()
-        val valuesNotFilledIn = values.filter { (_, value) -> value.isEmpty() || value.isBlank() }
-                .keys.fold("") { acc, value ->
-            "$acc$value\n"
-        }
-        if (valuesNotFilledIn.isNotEmpty()) {
-            Toast.makeText(this, "Please complete the following:\n$valuesNotFilledIn", Toast.LENGTH_LONG).show()
-            return
-        }
         values["filePath"] = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS).absolutePath
         updateViewElementsStatus(isEnabled = false)
+        val builder = StringBuilder()
         when (val result = JobApplier.applyForJob(values)) {
             is Success -> {
                 updateViewElementsStatus(isEnabled = true)
+                buildSuccessfulJobTitles(result, builder)
+                Snackbar.make(adView, "Number of jobs applied for ${result.jobEntries.size}", Snackbar.LENGTH_LONG)
+                        .setActionTextColor(Color.GREEN)
+                        .setAction("View details") { viewPopup(builder.toString()) }
+                        .show()
             }
             is Failure -> {
-                updateViewElementsStatus(isEnabled = false)
-                val builder = StringBuilder()
+                updateViewElementsStatus(isEnabled = true)
+                buildSuccessfulJobTitles(result, builder)
+                builder.appendln("Failed job applications:")
                 result.errorMessages.forEach {
                     builder.appendln("${it.errorMessage},${it.additionalInfo}")
                 }
-                val linearLayout = LinearLayout(this)
-                val scrollView = ScrollView(this)
-                val alertDialogBuilder = AlertDialog.Builder(this)
-                linearLayout.orientation = LinearLayout.VERTICAL
-                linearLayout.isVerticalScrollBarEnabled = true
-                val textView = TextView(this)
-                textView.text = builder.toString()
-                linearLayout.addView(textView)
-                scrollView.addView(linearLayout)
-                alertDialogBuilder.setView(scrollView)
-                alertDialogBuilder
-                        .setCancelable(false)
-                        .setPositiveButton("OK") { dialog, _ ->
-                            dialog.dismiss()
-                        }
-                val alertDialog = alertDialogBuilder.create()
-                alertDialog.show()
+                Snackbar.make(adView, "Error happened", Snackbar.LENGTH_LONG)
+                        .setActionTextColor(Color.RED)
+                        .setAction("View details") { viewPopup(builder.toString()) }
+                        .show()
             }
         }
         saveJobDataToSharedPreferences()
+    }
+
+    private fun buildSuccessfulJobTitles(result: JobResult, builder: StringBuilder) {
+        builder.appendln("Successfully sent job applications:")
+        result.jobEntries.forEach {
+            builder.appendln("Job title: ${it.jobTitle}")
+        }
+    }
+
+    private fun viewPopup(text: String) {
+        val linearLayout = LinearLayout(this)
+        val scrollView = ScrollView(this)
+        val alertDialogBuilder = AlertDialog.Builder(this)
+        linearLayout.orientation = LinearLayout.VERTICAL
+        linearLayout.isVerticalScrollBarEnabled = true
+        val textView = TextView(this)
+        textView.text = text
+        linearLayout.addView(textView)
+        scrollView.addView(linearLayout)
+        alertDialogBuilder.setView(scrollView)
+        alertDialogBuilder
+                .setCancelable(false)
+                .setPositiveButton("OK") { dialog, _ ->
+                    dialog.dismiss()
+                }
+        val alertDialog = alertDialogBuilder.create()
+        alertDialog.show()
     }
 
     private fun setValuesFromView() {
@@ -471,6 +505,7 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
         this.cell.isEnabled = isEnabled
         this.btnFileBrowser.isEnabled = isEnabled
         this.password.isEnabled = isEnabled
+        this.floatingActionButton.isEnabled = isEnabled
     }
 
 
