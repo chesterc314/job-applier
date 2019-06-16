@@ -26,10 +26,8 @@ import com.google.android.gms.ads.MobileAds
 import com.google.android.gms.ads.reward.RewardItem
 import com.google.android.gms.ads.reward.RewardedVideoAd
 import com.google.android.gms.ads.reward.RewardedVideoAdListener
-import com.jobapplier.jobapplier.service.Failure
 import com.jobapplier.jobapplier.service.JobApplier
 import com.jobapplier.jobapplier.service.JobResult
-import com.jobapplier.jobapplier.service.Success
 import com.robertlevonyan.views.customfloatingactionbutton.FloatingActionButton
 import kotlinx.android.synthetic.main.activity_main.*
 
@@ -44,15 +42,15 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
     private lateinit var password: EditText
     private lateinit var btnFileBrowser: Button
     private lateinit var txtCVPath: TextView
-    private var applyDate: Long = 0L
     private var location: String = ""
     private var cvPath = ""
     private var position: Int = 0
     private val values = HashMap<String, String>()
     private lateinit var privateSharedPrefs: SharedPreferences
     private lateinit var adView: AdView
-    private lateinit var mRewardedVideoAd: RewardedVideoAd
+    private lateinit var rewardedVideoAd: RewardedVideoAd
     private lateinit var floatingActionButton: FloatingActionButton
+    private lateinit var progressBar: ProgressBar
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -71,6 +69,12 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
         txtCVPath = findViewById(R.id.txtCVPath)
         adView = findViewById(R.id.adView)
         floatingActionButton = findViewById(R.id.floatingActionButton)
+        progressBar = ProgressBar(this)
+        progressBar.setBackgroundColor(Color.GREEN)
+        progressBar.visibility = View.INVISIBLE
+        progressBar.x = floatingActionButton.x
+        progressBar.y = floatingActionButton.y
+        progressBar.z = floatingActionButton.z
         val locationAdapter = ArrayAdapter.createFromResource(this,
                 R.array.location_array,
                 android.R.layout.simple_spinner_item)
@@ -81,63 +85,186 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
         MobileAds.initialize(this, getString(R.string.admob_jobapplier_app_id))
         val adRequest = AdRequest.Builder().build()
         adView.loadAd(adRequest)
-        mRewardedVideoAd = MobileAds.getRewardedVideoAdInstance(this)
-        mRewardedVideoAd.rewardedVideoAdListener = this
+        rewardedVideoAd = MobileAds.getRewardedVideoAdInstance(this)
+        rewardedVideoAd.rewardedVideoAdListener = this
         loadRewardedVideoAd()
     }
 
     fun applyNow(v: View) {
-        if(v.isEnabled) {
+        if (v.isEnabled) {
             setValuesFromView()
             val valuesNotFilledIn = values.filter { (_, value) -> value.isEmpty() || value.isBlank() }
                     .keys.fold("") { acc, value ->
                 "$acc$value\n"
             }
             if (valuesNotFilledIn.isNotEmpty()) {
-                Snackbar.make(adView, "Please complete the following:\n$valuesNotFilledIn", Snackbar.LENGTH_LONG)
+                Snackbar.make(adView, "Please complete the following:\n$valuesNotFilledIn", Snackbar.LENGTH_INDEFINITE)
                         .setActionTextColor(Color.RED)
                         .setAction("View details") { viewPopup("Please enter the following:\n$valuesNotFilledIn") }
                         .show()
                 return
             }
-            val alertDialogBuilder = AlertDialog.Builder(this)
-            alertDialogBuilder
-                    .setCancelable(false)
-                    .setMessage("Watch a short video ad to send out your C.V.")
-                    .setPositiveButton("Continue") { dialog, _ ->
-                        showRewardedAd()
-                        dialog.dismiss()
-                    }
-                    .setNegativeButton("Cancel"
-                    ) { dialog, _ ->
-                        dialog.cancel()
-                    }
-
-            val alertDialog = alertDialogBuilder.create()
-            alertDialog.show()
+            askForPermission(Manifest.permission.READ_EXTERNAL_STORAGE, REQUEST_READ_PERMISSION_JOB) {
+                askForPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE, REQUEST_WRITE_PERMISSION) {
+                    askToViewAnAd()
+                }
+            }
         }
 
     }
 
-    private fun showRewardedAd() {
-        if (mRewardedVideoAd.isLoaded) {
-            mRewardedVideoAd.show()
+    private fun askToViewAnAd() {
+        val alertDialogBuilder = AlertDialog.Builder(this)
+        alertDialogBuilder
+                .setCancelable(false)
+                .setMessage("Watch a short video ad to send out your C.V.")
+                .setPositiveButton("Continue") { dialog, _ ->
+                    showRewardedAd()
+                    dialog.dismiss()
+                }
+                .setNegativeButton("Cancel"
+                ) { dialog, _ ->
+                    dialog.cancel()
+                }
+
+        val alertDialog = alertDialogBuilder.create()
+        alertDialog.show()
+    }
+
+    private fun saveJobDataToSharedPreferences() {
+        setValuesFromView()
+        with(privateSharedPrefs.edit()) {
+            values.forEach {
+                putString(it.key, it.value)
+            }
+            putInt(JOB_APPLIER_LOCATION_POS_ID, position)
+            apply()
+        }
+    }
+
+    private fun readJobDataFromSharedPreferences() {
+        privateSharedPrefs.all.forEach { (key, value) ->
+            when (value) {
+                is String -> {
+                    this.values[key] = value
+                }
+                is Int -> {
+                    if (key == JOB_APPLIER_LOCATION_POS_ID) {
+                        this.position = value
+                    }
+                }
+            }
+        }
+    }
+
+    private fun updateViewWithData() {
+        this.jobTitle.setText(values["jobTitle"])
+        this.location = values["location"] ?: ""
+        this.locationSpinner.setSelection(this.position)
+        this.firstName.setText(values["firstName"])
+        this.lastName.setText(values["lastName"])
+        this.email.setText(values["email"])
+        this.cell.setText(values["cell"])
+        this.cvPath = values["cvFilePath"] ?: ""
+        this.txtCVPath.text = this.cvPath
+        this.password.setText(values["password"])
+    }
+
+    private fun applyForJobPosition() {
+        values["filePath"] = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS).absolutePath
+        updateViewElementsStatus(isEnabled = false)
+        val builder = StringBuilder()
+        saveJobDataToSharedPreferences()
+        JobApplier.applyForJob(values, { successResult ->
+            updateViewElementsStatus(isEnabled = true)
+            buildSuccessfulJobTitles(successResult, builder)
+            Snackbar.make(adView, "Number of jobs applied for ${successResult.jobEntries.size}", Snackbar.LENGTH_INDEFINITE)
+                    .setActionTextColor(Color.GREEN)
+                    .setAction("View details") { viewPopup(builder.toString()) }
+                    .show()
+        }, { failureResult ->
+            updateViewElementsStatus(isEnabled = true)
+            buildSuccessfulJobTitles(failureResult, builder)
+            builder.appendln("Failed job applications:")
+            failureResult.errorMessages.forEach {
+                builder.appendln("${it.errorMessage},${it.additionalInfo}")
+            }
+            Snackbar.make(adView, "Errors occurred for specific job applications", Snackbar.LENGTH_INDEFINITE)
+                    .setActionTextColor(Color.RED)
+                    .setAction("View details") { viewPopup(builder.toString()) }
+                    .show()
+
+        })
+    }
+
+    private fun buildSuccessfulJobTitles(result: JobResult, builder: StringBuilder) {
+        builder.appendln("Successfully sent job applications:")
+        result.jobEntries.forEach {
+            builder.appendln("Job: ${it.jobLink}")
+        }
+    }
+
+    private fun viewPopup(text: String) {
+        val linearLayout = LinearLayout(this)
+        val scrollView = ScrollView(this)
+        val alertDialogBuilder = AlertDialog.Builder(this)
+        linearLayout.orientation = LinearLayout.VERTICAL
+        linearLayout.isVerticalScrollBarEnabled = true
+        val textView = TextView(this)
+        textView.text = text
+        linearLayout.addView(textView)
+        scrollView.addView(linearLayout)
+        alertDialogBuilder.setView(scrollView)
+        alertDialogBuilder
+                .setCancelable(false)
+                .setPositiveButton("OK") { dialog, _ ->
+                    dialog.dismiss()
+                }
+        val alertDialog = alertDialogBuilder.create()
+        alertDialog.show()
+    }
+
+    private fun setValuesFromView() {
+        values["jobTitle"] = this.jobTitle.text.toString()
+        values["location"] = this.location
+        values["firstName"] = this.firstName.text.toString()
+        values["lastName"] = this.lastName.text.toString()
+        values["email"] = this.email.text.toString()
+        values["cell"] = this.cell.text.toString()
+        values["cvFilePath"] = this.cvPath
+        values["password"] = this.password.text.toString()
+    }
+
+    private fun updateViewElementsStatus(isEnabled: Boolean) {
+        this.jobTitle.isEnabled = isEnabled
+        this.locationSpinner.isEnabled = isEnabled
+        this.firstName.isEnabled = isEnabled
+        this.lastName.isEnabled = isEnabled
+        this.email.isEnabled = isEnabled
+        this.cell.isEnabled = isEnabled
+        this.btnFileBrowser.isEnabled = isEnabled
+        this.password.isEnabled = isEnabled
+        this.floatingActionButton.isEnabled = isEnabled
+
+        if (this.floatingActionButton.isEnabled) {
+            this.floatingActionButton.visibility = View.VISIBLE
+            this.progressBar.visibility = View.INVISIBLE
         } else {
-            Snackbar.make(adView, "Ad not loaded", Snackbar.LENGTH_LONG).show()
+            this.floatingActionButton.visibility = View.INVISIBLE
+            this.progressBar.visibility = View.VISIBLE
+        }
+    }
+
+    private fun showRewardedAd() {
+        if (rewardedVideoAd.isLoaded) {
+            rewardedVideoAd.show()
+        }else{
+            loadRewardedVideoAd()
         }
     }
 
     private fun loadRewardedVideoAd() {
-        mRewardedVideoAd.loadAd(getString(R.string.admob_jobapplier_reward_ad_unit_id),
-                AdRequest.Builder().build())
-    }
-
-    private fun askForPermissionAndApply() {
-        askForPermission(Manifest.permission.READ_EXTERNAL_STORAGE, REQUEST_READ_PERMISSION_JOB) {
-            askForPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE, REQUEST_WRITE_PERMISSION) {
-                applyForJobPosition()
-            }
-        }
+        rewardedVideoAd.loadAd(getString(R.string.admob_jobapplier_reward_ad_unit_id), AdRequest.Builder().build())
     }
 
     override fun onStart() {
@@ -150,13 +277,13 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
         readJobDataFromSharedPreferences()
         updateViewWithData()
         super.onResume()
-        mRewardedVideoAd.resume(this)
+        rewardedVideoAd.resume(this)
     }
 
     override fun onPause() {
         saveJobDataToSharedPreferences()
         super.onPause()
-        mRewardedVideoAd.pause(this)
+        rewardedVideoAd.pause(this)
     }
 
     override fun onStop() {
@@ -166,7 +293,7 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
 
     override fun onDestroy() {
         super.onDestroy()
-        mRewardedVideoAd.destroy(this)
+        rewardedVideoAd.destroy(this)
     }
 
     override fun onRewardedVideoAdLoaded() {
@@ -179,7 +306,7 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
     }
 
     override fun onRewarded(p0: RewardItem?) {
-        askForPermissionAndApply()
+        applyForJobPosition()
     }
 
     override fun onRewardedVideoStarted() {
@@ -199,10 +326,10 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
         if (ActivityCompat.checkSelfPermission(this, permissions[0]) == PackageManager.PERMISSION_GRANTED) {
             when (requestCode) {
                 REQUEST_READ_PERMISSION_JOB -> askForPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE, REQUEST_WRITE_PERMISSION) {
-                    applyForJobPosition()
+                    askToViewAnAd()
                 }
                 REQUEST_READ_PERMISSION_BROWSER -> browserDocumentFiles()
-                REQUEST_WRITE_PERMISSION -> applyForJobPosition()
+                REQUEST_WRITE_PERMISSION -> askToViewAnAd()
             }
             Toast.makeText(this, "Permission granted", Toast.LENGTH_SHORT).show()
         } else {
@@ -287,7 +414,10 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
         val intent = Intent(Intent.ACTION_GET_CONTENT)
         intent.addCategory(Intent.CATEGORY_OPENABLE)
         intent.type = "*/*"
-        val mimeTypes = arrayOf("application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+        val mimeTypes = arrayOf(
+                "application/pdf",
+                "application/msword",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
         intent.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes)
         intent.putExtra(Intent.EXTRA_LOCAL_ONLY, true)
         startActivityForResult(intent, READ_REQUEST_CODE)
@@ -386,136 +516,12 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
         return "com.google.android.apps.photos.content" == uri.authority
     }
 
-    private fun saveJobDataToSharedPreferences() {
-        setValuesFromView()
-        with(privateSharedPrefs.edit()) {
-            values.forEach {
-                putString(it.key, it.value)
-            }
-            putLong(JOB_APPLIER_APPLY_DATE, applyDate)
-            putInt(JOB_APPLIER_LOCATION_POS_ID, position)
-            apply()
-        }
-    }
-
-    private fun readJobDataFromSharedPreferences() {
-        privateSharedPrefs.all.forEach { (key, value) ->
-            when (value) {
-                is String -> {
-                    this.values[key] = value
-                }
-                is Int -> {
-                    if (key == JOB_APPLIER_LOCATION_POS_ID) {
-                        this.position = value
-                    }
-                }
-                is Long -> {
-                    this.applyDate = value
-                }
-            }
-        }
-    }
-
-    private fun updateViewWithData() {
-        this.jobTitle.setText(values["jobTitle"])
-        this.location = values["location"] ?: ""
-        this.locationSpinner.setSelection(this.position)
-        this.firstName.setText(values["firstName"])
-        this.lastName.setText(values["lastName"])
-        this.email.setText(values["email"])
-        this.cell.setText(values["cell"])
-        this.cvPath = values["cvFilePath"] ?: ""
-        this.txtCVPath.text = this.cvPath
-        this.password.setText(values["password"])
-    }
-
-    private fun applyForJobPosition() {
-        values["filePath"] = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS).absolutePath
-        updateViewElementsStatus(isEnabled = false)
-        val builder = StringBuilder()
-        when (val result = JobApplier.applyForJob(values)) {
-            is Success -> {
-                updateViewElementsStatus(isEnabled = true)
-                buildSuccessfulJobTitles(result, builder)
-                Snackbar.make(adView, "Number of jobs applied for ${result.jobEntries.size}", Snackbar.LENGTH_LONG)
-                        .setActionTextColor(Color.GREEN)
-                        .setAction("View details") { viewPopup(builder.toString()) }
-                        .show()
-            }
-            is Failure -> {
-                updateViewElementsStatus(isEnabled = true)
-                buildSuccessfulJobTitles(result, builder)
-                builder.appendln("Failed job applications:")
-                result.errorMessages.forEach {
-                    builder.appendln("${it.errorMessage},${it.additionalInfo}")
-                }
-                Snackbar.make(adView, "Error happened", Snackbar.LENGTH_LONG)
-                        .setActionTextColor(Color.RED)
-                        .setAction("View details") { viewPopup(builder.toString()) }
-                        .show()
-            }
-        }
-        saveJobDataToSharedPreferences()
-    }
-
-    private fun buildSuccessfulJobTitles(result: JobResult, builder: StringBuilder) {
-        builder.appendln("Successfully sent job applications:")
-        result.jobEntries.forEach {
-            builder.appendln("Job title: ${it.jobTitle}")
-        }
-    }
-
-    private fun viewPopup(text: String) {
-        val linearLayout = LinearLayout(this)
-        val scrollView = ScrollView(this)
-        val alertDialogBuilder = AlertDialog.Builder(this)
-        linearLayout.orientation = LinearLayout.VERTICAL
-        linearLayout.isVerticalScrollBarEnabled = true
-        val textView = TextView(this)
-        textView.text = text
-        linearLayout.addView(textView)
-        scrollView.addView(linearLayout)
-        alertDialogBuilder.setView(scrollView)
-        alertDialogBuilder
-                .setCancelable(false)
-                .setPositiveButton("OK") { dialog, _ ->
-                    dialog.dismiss()
-                }
-        val alertDialog = alertDialogBuilder.create()
-        alertDialog.show()
-    }
-
-    private fun setValuesFromView() {
-        values["jobTitle"] = this.jobTitle.text.toString()
-        values["location"] = this.location
-        values["firstName"] = this.firstName.text.toString()
-        values["lastName"] = this.lastName.text.toString()
-        values["email"] = this.email.text.toString()
-        values["cell"] = this.cell.text.toString()
-        values["cvFilePath"] = this.cvPath
-        values["password"] = this.password.text.toString()
-    }
-
-    private fun updateViewElementsStatus(isEnabled: Boolean) {
-        this.jobTitle.isEnabled = isEnabled
-        this.locationSpinner.isEnabled = isEnabled
-        this.firstName.isEnabled = isEnabled
-        this.lastName.isEnabled = isEnabled
-        this.email.isEnabled = isEnabled
-        this.cell.isEnabled = isEnabled
-        this.btnFileBrowser.isEnabled = isEnabled
-        this.password.isEnabled = isEnabled
-        this.floatingActionButton.isEnabled = isEnabled
-    }
-
-
     companion object {
         const val REQUEST_READ_PERMISSION_JOB = 1
         const val REQUEST_READ_PERMISSION_BROWSER = 2
         const val REQUEST_WRITE_PERMISSION = 3
         const val READ_REQUEST_CODE = 65
         const val JOB_APPLIER_SHARED_KEY = "com.jobapplier.jobapplier.JOB_APPLIER_SHARED_KEY"
-        const val JOB_APPLIER_APPLY_DATE = "com.jobapplier.jobapplier.APPLY_DATE"
         const val JOB_APPLIER_LOCATION_POS_ID = "com.jobapplier.jobapplier.LOCATION_POS_ID"
     }
 }

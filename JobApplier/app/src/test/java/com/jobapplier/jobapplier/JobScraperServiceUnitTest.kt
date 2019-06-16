@@ -10,9 +10,9 @@ import org.junit.Test
  * See [testing documentation](http://d.android.com/tools/testing).
  */
 class JobScraperServiceUnitTest {
-    @Test
-    fun getJobs_executesSuccessfully() {
-        val jobs = JobScraperService.getJobs("cashier", "johannesburg")
-        assertNotEquals(0, jobs.size)
-    }
+//    @Test
+//    fun getJobs_executesSuccessfully() {
+//        val jobs = JobScraperService.getJobs("cashier", "johannesburg")
+//        assertNotEquals(0, jobs.size)
+//    }
 }
