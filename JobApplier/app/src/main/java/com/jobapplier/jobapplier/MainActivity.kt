@@ -16,6 +16,8 @@ import android.support.v4.app.ActivityCompat
 import android.support.v4.content.ContextCompat
 import android.support.v7.app.AlertDialog
 import android.support.v7.app.AppCompatActivity
+import android.text.Html
+import android.text.method.LinkMovementMethod
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
@@ -45,13 +47,13 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
     private var location: String = ""
     private var cvPath = ""
     private var position: Int = 0
+    private var showNotice: Boolean = true
     private val values = HashMap<String, String>()
     private lateinit var privateSharedPrefs: SharedPreferences
     private lateinit var adView: AdView
     private lateinit var rewardedVideoAd: RewardedVideoAd
     private lateinit var floatingActionButton: FloatingActionButton
     private lateinit var progressBar: ProgressBar
-
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -69,19 +71,14 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
         txtCVPath = findViewById(R.id.txtCVPath)
         adView = findViewById(R.id.adView)
         floatingActionButton = findViewById(R.id.floatingActionButton)
-        progressBar = ProgressBar(this)
-        progressBar.setBackgroundColor(Color.GREEN)
-        progressBar.visibility = View.INVISIBLE
-        progressBar.x = floatingActionButton.x
-        progressBar.y = floatingActionButton.y
-        progressBar.z = floatingActionButton.z
+        progressBar = findViewById(R.id.progressBar)
+        btnFileBrowser.setOnClickListener(this)
         val locationAdapter = ArrayAdapter.createFromResource(this,
                 R.array.location_array,
                 android.R.layout.simple_spinner_item)
         locationAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         locationSpinner.adapter = locationAdapter
         locationSpinner.onItemSelectedListener = this
-        btnFileBrowser.setOnClickListener(this)
         MobileAds.initialize(this, getString(R.string.admob_jobapplier_app_id))
         val adRequest = AdRequest.Builder().build()
         adView.loadAd(adRequest)
@@ -95,25 +92,29 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
             setValuesFromView()
             val valuesNotFilledIn = values.filter { (_, value) -> value.isEmpty() || value.isBlank() }
                     .keys.fold("") { acc, value ->
-                "$acc$value\n"
+                "$acc$value<br />"
             }
             if (valuesNotFilledIn.isNotEmpty()) {
                 Snackbar.make(adView, "Please complete the following:\n$valuesNotFilledIn", Snackbar.LENGTH_INDEFINITE)
                         .setActionTextColor(Color.RED)
-                        .setAction("View details") { viewPopup("Please enter the following:\n$valuesNotFilledIn") }
+                        .setAction("View details") { viewPopup("Please enter the following:", valuesNotFilledIn) }
                         .show()
                 return
             }
-            askForPermission(Manifest.permission.READ_EXTERNAL_STORAGE, REQUEST_READ_PERMISSION_JOB) {
-                askForPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE, REQUEST_WRITE_PERMISSION) {
-                    askToViewAnAd()
-                }
-            }
+            askForPermissionToViewAd()
         }
 
     }
 
-    private fun askToViewAnAd() {
+    private fun askForPermissionToViewAd() {
+        askForPermission(Manifest.permission.READ_EXTERNAL_STORAGE, REQUEST_READ_PERMISSION_JOB) {
+            askForPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE, REQUEST_WRITE_PERMISSION) {
+                viewAnAd()
+            }
+        }
+    }
+
+    private fun viewAnAd() {
         val alertDialogBuilder = AlertDialog.Builder(this)
         alertDialogBuilder
                 .setCancelable(false)
@@ -137,7 +138,8 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
             values.forEach {
                 putString(it.key, it.value)
             }
-            putInt(JOB_APPLIER_LOCATION_POS_ID, position)
+            putInt(JOB_APPLIER_LOCATION_SELECT_ID, position)
+            putBoolean(JOB_APPLIER_IMPORTANT_NOTICE_KEY, showNotice)
             apply()
         }
     }
@@ -146,15 +148,13 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
         privateSharedPrefs.all.forEach { (key, value) ->
             when (value) {
                 is String -> {
-                    this.values[key] = value
-                }
-                is Int -> {
-                    if (key == JOB_APPLIER_LOCATION_POS_ID) {
-                        this.position = value
-                    }
+                        this.values[key] = value
                 }
             }
         }
+        val value = privateSharedPrefs.getInt(JOB_APPLIER_LOCATION_SELECT_ID, 0)
+        this.position = value
+        this.showNotice = privateSharedPrefs.getBoolean(JOB_APPLIER_IMPORTANT_NOTICE_KEY, true)
     }
 
     private fun updateViewWithData() {
@@ -178,46 +178,63 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
         JobApplier.applyForJob(values, { successResult ->
             updateViewElementsStatus(isEnabled = true)
             buildSuccessfulJobTitles(successResult, builder)
-            Snackbar.make(adView, "Number of jobs applied for ${successResult.jobEntries.size}", Snackbar.LENGTH_INDEFINITE)
-                    .setActionTextColor(Color.GREEN)
-                    .setAction("View details") { viewPopup(builder.toString()) }
-                    .show()
+            if (successResult.jobEntries.isNotEmpty()) {
+                Snackbar.make(adView, "Number of jobs applied for ${successResult.jobEntries.size}", Snackbar.LENGTH_INDEFINITE)
+                        .setActionTextColor(Color.GREEN)
+                        .setAction("View details") { viewPopup("Successfully sent job applications:", builder.toString()) }
+                        .show()
+            } else {
+                val titleText = "No job applications to apply for"
+                Snackbar.make(adView, titleText, Snackbar.LENGTH_INDEFINITE)
+                        .setActionTextColor(Color.WHITE)
+                        .setAction("View details") {
+                            viewPopup(titleText,
+                                    "This could be that you already sent out job applications for this job title: ${values["jobTitle"]} or there is just no listings for this job title")
+                        }
+                        .show()
+            }
         }, { failureResult ->
             updateViewElementsStatus(isEnabled = true)
             buildSuccessfulJobTitles(failureResult, builder)
-            builder.appendln("Failed job applications:")
             failureResult.errorMessages.forEach {
-                builder.appendln("${it.errorMessage},${it.additionalInfo}")
+                builder.append("${it.errorMessage},${it.additionalInfo} <br />")
             }
             Snackbar.make(adView, "Errors occurred for specific job applications", Snackbar.LENGTH_INDEFINITE)
                     .setActionTextColor(Color.RED)
-                    .setAction("View details") { viewPopup(builder.toString()) }
+                    .setAction("View details") { viewPopup("Failed job applications:", builder.toString()) }
                     .show()
 
         })
     }
 
     private fun buildSuccessfulJobTitles(result: JobResult, builder: StringBuilder) {
-        builder.appendln("Successfully sent job applications:")
         result.jobEntries.forEach {
-            builder.appendln("Job: ${it.jobLink}")
+            builder.append("Job link: <a href='${it.jobLink}'>${it.jobLink}</a> <br />")
         }
     }
 
-    private fun viewPopup(text: String) {
+    private fun viewPopup(title: String, text: String, isCancelable: Boolean = false, action: () -> Unit = {}) {
         val linearLayout = LinearLayout(this)
         val scrollView = ScrollView(this)
         val alertDialogBuilder = AlertDialog.Builder(this)
         linearLayout.orientation = LinearLayout.VERTICAL
         linearLayout.isVerticalScrollBarEnabled = true
+        val lp = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT)
+        lp.setMargins(36, 36, 36, 36)
         val textView = TextView(this)
-        textView.text = text
+        textView.movementMethod = LinkMovementMethod.getInstance()
+        textView.layoutParams = lp
+        textView.text = Html.fromHtml(text, Html.FROM_HTML_MODE_LEGACY)
         linearLayout.addView(textView)
         scrollView.addView(linearLayout)
         alertDialogBuilder.setView(scrollView)
         alertDialogBuilder
-                .setCancelable(false)
+                .setCancelable(isCancelable)
+                .setTitle(title)
                 .setPositiveButton("OK") { dialog, _ ->
+                    action()
                     dialog.dismiss()
                 }
         val alertDialog = alertDialogBuilder.create()
@@ -248,9 +265,9 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
 
         if (this.floatingActionButton.isEnabled) {
             this.floatingActionButton.visibility = View.VISIBLE
-            this.progressBar.visibility = View.INVISIBLE
+            this.progressBar.visibility = View.GONE
         } else {
-            this.floatingActionButton.visibility = View.INVISIBLE
+            this.floatingActionButton.visibility = View.GONE
             this.progressBar.visibility = View.VISIBLE
         }
     }
@@ -258,7 +275,7 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
     private fun showRewardedAd() {
         if (rewardedVideoAd.isLoaded) {
             rewardedVideoAd.show()
-        }else{
+        } else {
             loadRewardedVideoAd()
         }
     }
@@ -270,12 +287,18 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
     override fun onStart() {
         readJobDataFromSharedPreferences()
         updateViewWithData()
+        if (showNotice) {
+            val insecureLink = "https://www.google.com/settings/security/lesssecureapps"
+            viewPopup("IMPORTANT NOTICE",
+             "Please ensure that less secure applications on your gmail account is <b>enabled</b>, if not go here: <a href='$insecureLink'>$insecureLink</a> <br /> This will allow this app to send out emails on your behave.",
+                    false) {
+                showNotice = false
+            }
+        }
         super.onStart()
     }
 
     override fun onResume() {
-        readJobDataFromSharedPreferences()
-        updateViewWithData()
         super.onResume()
         rewardedVideoAd.resume(this)
     }
@@ -326,14 +349,14 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
         if (ActivityCompat.checkSelfPermission(this, permissions[0]) == PackageManager.PERMISSION_GRANTED) {
             when (requestCode) {
                 REQUEST_READ_PERMISSION_JOB -> askForPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE, REQUEST_WRITE_PERMISSION) {
-                    askToViewAnAd()
+                    viewAnAd()
                 }
                 REQUEST_READ_PERMISSION_BROWSER -> browserDocumentFiles()
-                REQUEST_WRITE_PERMISSION -> askToViewAnAd()
+                REQUEST_WRITE_PERMISSION -> viewAnAd()
             }
-            Toast.makeText(this, "Permission granted", Toast.LENGTH_SHORT).show()
         } else {
             Toast.makeText(this, "Permission denied", Toast.LENGTH_SHORT).show()
+            finish()
         }
     }
 
@@ -345,11 +368,22 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
             R.id.action_rate -> {
-                rateApp()
-                true
+                if (btnFileBrowser.isEnabled) {
+                    rateApp()
+                    true
+                } else {
+                    viewPopup("Please wait...",
+                            "In the process of sending out applications, once completed then you may rate this app.<br />Thank you for your patience.",
+                            isCancelable = true)
+                    false
+                }
             }
             else -> super.onOptionsItemSelected(item)
         }
+    }
+
+    override fun onBackPressed() {
+        //do nothing
     }
 
     private fun rateApp() {
@@ -522,6 +556,7 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
         const val REQUEST_WRITE_PERMISSION = 3
         const val READ_REQUEST_CODE = 65
         const val JOB_APPLIER_SHARED_KEY = "com.jobapplier.jobapplier.JOB_APPLIER_SHARED_KEY"
-        const val JOB_APPLIER_LOCATION_POS_ID = "com.jobapplier.jobapplier.LOCATION_POS_ID"
+        const val JOB_APPLIER_LOCATION_SELECT_ID = "com.jobapplier.jobapplier.LOCATION_SELECT_ID"
+        const val JOB_APPLIER_IMPORTANT_NOTICE_KEY = "com.jobapplier.jobapplier.JOB_APPLIER_IMPORTANT_NOTICE_KEY"
     }
 }

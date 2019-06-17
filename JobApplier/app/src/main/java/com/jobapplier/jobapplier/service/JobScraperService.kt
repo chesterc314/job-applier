@@ -35,7 +35,7 @@ object JobScraperService {
             }
 
             return document.select(".btnView").map {
-                val link = "http://www.jobmail.co.za${it.attr("href")}"
+                val link = "https://www.jobmail.co.za${it.attr("href")}"
                 val jobPageDetail = loadWebPage(link).parse()
                 val jobDescription = jobPageDetail.select(".jobDescription").firstOrNull()?.text()
                         ?: "".trim()
@@ -44,7 +44,7 @@ object JobScraperService {
             }
         }
 
-        val url = "http://www.jobmail.co.za/job-search/${jobTitle.replace(" ", "+")}/all-industries/all-sub-industries/$location/all-jobs/page1/matchany/sortrelevance"
+        val url = "https://www.jobmail.co.za/job-search/${jobTitle.replace(" ", "+")}/all-industries/all-sub-industries/$location/all-jobs/page1/matchany/sortrelevance"
         return addJobs(loadWebPage(url).parse()).filter { it.email.isNotEmpty() }
     }
 
