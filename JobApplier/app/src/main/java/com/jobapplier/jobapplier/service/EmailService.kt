@@ -62,7 +62,7 @@ object EmailService {
             multipart.addBodyPart(textPart)
             message.setContent(multipart)
         }
-        //Transport.send(message)
+        Transport.send(message)
     }
 }
 

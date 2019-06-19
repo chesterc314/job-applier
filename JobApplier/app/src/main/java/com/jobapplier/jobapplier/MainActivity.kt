@@ -58,6 +58,13 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+        adView = findViewById(R.id.adView)
+        MobileAds.initialize(this, getString(R.string.admob_jobapplier_app_id))
+        val adRequest = AdRequest.Builder().build()
+        adView.loadAd(adRequest)
+        rewardedVideoAd = MobileAds.getRewardedVideoAdInstance(this)
+        rewardedVideoAd.rewardedVideoAdListener = this
+        loadRewardedVideoAd()
         setSupportActionBar(toolbar)
         privateSharedPrefs = getSharedPreferences(JOB_APPLIER_SHARED_KEY, Context.MODE_PRIVATE)
         jobTitle = findViewById(R.id.jobTitle)
@@ -69,7 +76,6 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
         password = findViewById(R.id.password)
         btnFileBrowser = findViewById(R.id.btnFileBrowser)
         txtCVPath = findViewById(R.id.txtCVPath)
-        adView = findViewById(R.id.adView)
         floatingActionButton = findViewById(R.id.floatingActionButton)
         progressBar = findViewById(R.id.progressBar)
         btnFileBrowser.setOnClickListener(this)
@@ -79,12 +85,6 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
         locationAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         locationSpinner.adapter = locationAdapter
         locationSpinner.onItemSelectedListener = this
-        MobileAds.initialize(this, getString(R.string.admob_jobapplier_app_id))
-        val adRequest = AdRequest.Builder().build()
-        adView.loadAd(adRequest)
-        rewardedVideoAd = MobileAds.getRewardedVideoAdInstance(this)
-        rewardedVideoAd.rewardedVideoAdListener = this
-        loadRewardedVideoAd()
     }
 
     fun applyNow(v: View) {
@@ -103,7 +103,6 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
             }
             askForPermissionToViewAd()
         }
-
     }
 
     private fun askForPermissionToViewAd() {
@@ -329,6 +328,7 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
     }
 
     override fun onRewarded(p0: RewardItem?) {
+        loadRewardedVideoAd()
         applyForJobPosition()
     }
 

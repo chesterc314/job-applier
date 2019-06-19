@@ -81,11 +81,11 @@
         <item>ZULULAND</item>
     </string-array>
     <!--test-->
-    <string name="admob_jobapplier_app_id">ca-app-pub-3940256099942544~3347511713</string>
-    <string name="admob_jobapplier_reward_ad_unit_id">ca-app-pub-3940256099942544/5224354917</string>
-    <string name="admob_jobapplier_banner_ad_unit_id">ca-app-pub-3940256099942544/6300978111</string>
+    <!--<string name="admob_jobapplier_app_id">ca-app-pub-3940256099942544~3347511713</string>-->
+    <!--<string name="admob_jobapplier_reward_ad_unit_id">ca-app-pub-3940256099942544/5224354917</string>-->
+    <!--<string name="admob_jobapplier_banner_ad_unit_id">ca-app-pub-3940256099942544/6300978111</string>-->
     <!--prod-->
-    <!--<string name="admob_jobapplier_app_id">ca-app-pub-5648056385123299~2159595728</string>-->
-    <!--<string name="admob_jobapplier_reward_ad_unit_id">ca-app-pub-5648056385123299/8341860691</string>-->
-    <!--<string name="admob_jobapplier_banner_ad_unit_id">ca-app-pub-5648056385123299/8341860691</string>-->
+    <string name="admob_jobapplier_app_id">ca-app-pub-5648056385123299~3257896267</string>
+    <string name="admob_jobapplier_reward_ad_unit_id">ca-app-pub-5648056385123299/9226153212</string>
+    <string name="admob_jobapplier_banner_ad_unit_id">ca-app-pub-5648056385123299/1954167852</string>
 </resources>
