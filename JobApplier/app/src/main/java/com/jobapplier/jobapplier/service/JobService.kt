@@ -42,18 +42,21 @@ object JobService {
                                     .replace("{displayName}", displayName),
                             attachment = Attachment(fileName, application.cvFilePath)
                     )
-                    try {
-                        EmailService.sendAsyncEmail(Email(application.email, application.password, emailMessage))
-                        jobEntries.add(jobEntry)
-                    } catch (auth: AuthenticationFailedException) {
-                        val additionalInfo =
-                                "Error with email authentication Your Email: ${application.email}." +
-                                        "Please check that your email and password is correct or please enable less secure applications on your Gmail account, here: https://www.google.com/settings/security/lesssecureapps"
-                        errors.add(JobErrorMessage(it.link, it.email, additionalInfo))
-                        jobEntries.remove(jobEntry)
-                    } catch (e: Exception) {
-                        errors.add(JobErrorMessage(it.link, it.email, "Error sending email for this job. Your Email: ${application.email} and CV path: ${application.cvFilePath}"))
-                        jobEntries.remove(jobEntry)
+                    EmailService.sendAsyncEmail(Email(application.email, application.password, emailMessage)) { ex ->
+                        when (ex) {
+                            is AuthenticationFailedException -> {
+                                val additionalInfo =
+                                        "Error with email authentication Your Email: ${application.email}." +
+                                                "Please check that your email and password is correct or please enable less secure applications on your Gmail account, here: https://www.google.com/settings/security/lesssecureapps"
+                                errors.add(JobErrorMessage(it.link, it.email, additionalInfo))
+                                jobEntries.remove(jobEntry)
+                            }
+                            is Exception -> {
+                                errors.add(JobErrorMessage(it.link, it.email, "Error sending email for this job. Your Email: ${application.email} and CV path: ${application.cvFilePath}"))
+                                jobEntries.remove(jobEntry)
+                            }
+                            else -> jobEntries.add(jobEntry)
+                        }
                     }
                 }
                 if (errors.isNotEmpty()) {

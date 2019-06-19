@@ -4,10 +4,7 @@ import android.os.AsyncTask
 import java.util.*
 import javax.activation.DataHandler
 import javax.activation.FileDataSource
-import javax.mail.Message
-import javax.mail.PasswordAuthentication
-import javax.mail.Session
-import javax.mail.Transport
+import javax.mail.*
 import javax.mail.internet.InternetAddress
 import javax.mail.internet.MimeBodyPart
 import javax.mail.internet.MimeMessage
@@ -27,15 +24,25 @@ object EmailService {
     private const val SMTP_HOST = "smtp.gmail.com"
     private const val SMTP_PORT = "587"
 
-    private class EmailAsyncTask : AsyncTask<Email, Void, Void?>() {
-        override fun doInBackground(vararg params: Email?): Void? {
-            sendEmail(params[0]!!)
+    private class EmailAsyncTask(val postAction: (Exception?) -> Unit) : AsyncTask<Email, Void, Exception?>() {
+        override fun doInBackground(vararg params: Email?): Exception? {
+            try {
+                sendEmail(params[0]!!)
+            }catch (auth: AuthenticationFailedException) {
+                return auth
+            } catch (e: Exception) {
+                return e
+            }
             return null
+        }
+
+        override fun onPostExecute(result: Exception?) {
+            postAction(result)
         }
     }
 
-    fun sendAsyncEmail(email: Email) {
-        EmailAsyncTask().execute(email)
+    fun sendAsyncEmail(email: Email, callBack: (Exception?) -> Unit) {
+        EmailAsyncTask(callBack).execute(email)
     }
 
     private fun sendEmail(email: Email) {
