@@ -42,27 +42,13 @@ object JobService {
                                     .replace("{displayName}", displayName),
                             attachment = Attachment(fileName, application.cvFilePath)
                     )
-                    EmailService.sendAsyncEmail(Email(application.email, application.password, emailMessage)) { ex ->
-                        when (ex) {
-                            is AuthenticationFailedException -> {
-                                val additionalInfo =
-                                        "Error with email authentication Your Email: ${application.email}." +
-                                                "Please check that your email and password is correct or please enable less secure applications on your Gmail account, here: https://www.google.com/settings/security/lesssecureapps"
-                                errors.add(JobErrorMessage(it.link, it.email, additionalInfo))
-                                jobEntries.remove(jobEntry)
-                            }
-                            is Exception -> {
-                                errors.add(JobErrorMessage(it.link, it.email, "Error sending email for this job. Your Email: ${application.email} and CV path: ${application.cvFilePath}"))
-                                jobEntries.remove(jobEntry)
-                            }
-                            else -> jobEntries.add(jobEntry)
-                        }
-                    }
+                    val email = Email(application.email, application.password, emailMessage)
+                    sendEmailAsyncAndHandleErrors(email, application, errors, it, jobEntries, jobEntry)
                 }
                 if (errors.isNotEmpty()) {
                     val failure = Failure(errors, jobEntries)
-                    errorAction(failure)
                     successAction(failure)
+                    errorAction(failure)
                 } else {
                     val success = Success(jobEntries)
                     successAction(success)
@@ -72,6 +58,30 @@ object JobService {
             errors.add(ScraperErrorMessage("Your Email: ${application.email} Job Title: ${application.jobTitle} and Location: ${application.location}"))
             val failure = Failure(errors, jobEntries)
             errorAction(failure)
+        }
+    }
+
+    private fun sendEmailAsyncAndHandleErrors(email: Email,
+                                              application: ApplicationModel,
+                                              errors: ArrayList<ErrorMessage>,
+                                              it: Job,
+                                              jobEntries: ArrayList<JobEntry>,
+                                              jobEntry: JobEntry) {
+        EmailService.sendAsyncEmail(email) { ex ->
+            when (ex) {
+                is AuthenticationFailedException -> {
+                    val additionalInfo =
+                            "Error with email authentication Your Email: ${application.email}." +
+                                    "Please check that your email and password is correct or please enable less secure applications on your Gmail account, here: https://www.google.com/settings/security/lesssecureapps"
+                    errors.add(JobErrorMessage(it.link, it.email, additionalInfo))
+                    jobEntries.remove(jobEntry)
+                }
+                is Exception -> {
+                    errors.add(JobErrorMessage(it.link, it.email, "Error sending email for this job. Your Email: ${application.email} and CV path: ${application.cvFilePath}"))
+                    jobEntries.remove(jobEntry)
+                }
+                else -> jobEntries.add(jobEntry)
+            }
         }
     }
 }

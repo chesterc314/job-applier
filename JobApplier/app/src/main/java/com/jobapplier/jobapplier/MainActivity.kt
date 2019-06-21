@@ -11,6 +11,7 @@ import android.os.Bundle
 import android.os.Environment
 import android.provider.DocumentsContract
 import android.provider.MediaStore
+import android.provider.Settings
 import android.support.design.widget.Snackbar
 import android.support.v4.app.ActivityCompat
 import android.support.v4.content.ContextCompat
@@ -28,10 +29,10 @@ import com.google.android.gms.ads.MobileAds
 import com.google.android.gms.ads.reward.RewardItem
 import com.google.android.gms.ads.reward.RewardedVideoAd
 import com.google.android.gms.ads.reward.RewardedVideoAdListener
-import com.jobapplier.jobapplier.service.JobApplier
-import com.jobapplier.jobapplier.service.JobResult
+import com.jobapplier.jobapplier.service.*
 import com.robertlevonyan.views.customfloatingactionbutton.FloatingActionButton
 import kotlinx.android.synthetic.main.activity_main.*
+import javax.mail.AuthenticationFailedException
 
 
 class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, View.OnClickListener, RewardedVideoAdListener {
@@ -95,13 +96,39 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
                 "$acc$value<br />"
             }
             if (valuesNotFilledIn.isNotEmpty()) {
-                Snackbar.make(adView, "Please complete the following:\n$valuesNotFilledIn", Snackbar.LENGTH_INDEFINITE)
+                Snackbar.make(adView, "Please fill in all inputs", Snackbar.LENGTH_INDEFINITE)
                         .setActionTextColor(Color.RED)
                         .setAction("View details") { viewPopup("Please enter the following:", valuesNotFilledIn) }
                         .show()
                 return
+            } else {
+                val email = Email(
+                        values["email"]!!,
+                        values["password"]!!,
+                        EmailMessage(values["email"]!!,
+                                "Welcome to Job Applier",
+                                "Dear ${values["firstName"]} ${values["lastName"]},\n Welcome to Job Applier.\n This is a test email to valid your gmail account credentials before sending out your C.V.\n Thank you."))
+                EmailService.sendAsyncEmail(email) { ex ->
+                    when (ex) {
+                        is AuthenticationFailedException -> {
+                            val additionalInfo =
+                                    "Your Email: ${values["email"]}.<br /> Please check that your email and password is correct or please enable less secure applications on your gmail account, go here to enable it: https://www.google.com/settings/security/lesssecureapps."
+                            Snackbar.make(adView, "Error with email authentication", Snackbar.LENGTH_INDEFINITE)
+                                    .setActionTextColor(Color.RED)
+                                    .setAction("View details") { viewPopup("Error with email authentication", additionalInfo) }
+                                    .show()
+                        }
+                        is Exception -> {
+                            val additionalInfo = "Your Email: ${values["email"]}"
+                            Snackbar.make(adView, "Error sending email for this job", Snackbar.LENGTH_INDEFINITE)
+                                    .setActionTextColor(Color.RED)
+                                    .setAction("View details") { viewPopup("Error sending email for this job", additionalInfo) }
+                                    .show()
+                        }
+                        else -> askForPermissionToViewAd()
+                    }
+                }
             }
-            askForPermissionToViewAd()
         }
     }
 
@@ -147,7 +174,7 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
         privateSharedPrefs.all.forEach { (key, value) ->
             when (value) {
                 is String -> {
-                        this.values[key] = value
+                    this.values[key] = value
                 }
             }
         }
@@ -289,7 +316,7 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
         if (showNotice) {
             val insecureLink = "https://www.google.com/settings/security/lesssecureapps"
             viewPopup("IMPORTANT NOTICE",
-             "Please ensure that less secure applications on your gmail account is <b>enabled</b>, if not go here: <a href='$insecureLink'>$insecureLink</a> <br /> This will allow this app to send out emails on your behave.",
+                    "Please ensure that less secure applications on your gmail account is <b>enabled</b>, if not go here: <a href='$insecureLink'>$insecureLink</a> <br /> This will allow this app to send out emails on your behave.",
                     false) {
                 showNotice = false
             }
@@ -355,8 +382,7 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
                 REQUEST_WRITE_PERMISSION -> viewAnAd()
             }
         } else {
-            Toast.makeText(this, "Permission denied", Toast.LENGTH_SHORT).show()
-            finish()
+            viewPopup("File permissions not enabled", "This app requires access to files. Go to app settings to re-enable.")
         }
     }
 
@@ -410,14 +436,7 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
     private fun askForPermission(permission: String, requestCode: Int?, action: () -> Unit) {
         if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
             if (ActivityCompat.shouldShowRequestPermissionRationale(this, permission)) {
-                AlertDialog.Builder(this)
-                        .setMessage("Request permission to access resource")
-                        .setPositiveButton(android.R.string.ok) { _, _ ->
-                            ActivityCompat.requestPermissions(this, arrayOf(permission), requestCode!!)
-                        }
-                        .setNegativeButton(android.R.string.cancel) { dialog, _ ->
-                            dialog.dismiss()
-                        }.create()
+                ActivityCompat.requestPermissions(this, arrayOf(permission), requestCode!!)
             } else {
                 ActivityCompat.requestPermissions(this, arrayOf(permission), requestCode!!)
             }
