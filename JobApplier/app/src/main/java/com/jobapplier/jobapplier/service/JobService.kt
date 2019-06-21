@@ -47,8 +47,8 @@ object JobService {
                 }
                 if (errors.isNotEmpty()) {
                     val failure = Failure(errors, jobEntries)
-                    successAction(failure)
                     errorAction(failure)
+                    successAction(failure)
                 } else {
                     val success = Success(jobEntries)
                     successAction(success)
@@ -67,6 +67,7 @@ object JobService {
                                               it: Job,
                                               jobEntries: ArrayList<JobEntry>,
                                               jobEntry: JobEntry) {
+        jobEntries.add(jobEntry)
         EmailService.sendAsyncEmail(email) { ex ->
             when (ex) {
                 is AuthenticationFailedException -> {
@@ -80,7 +81,6 @@ object JobService {
                     errors.add(JobErrorMessage(it.link, it.email, "Error sending email for this job. Your Email: ${application.email} and CV path: ${application.cvFilePath}"))
                     jobEntries.remove(jobEntry)
                 }
-                else -> jobEntries.add(jobEntry)
             }
         }
     }

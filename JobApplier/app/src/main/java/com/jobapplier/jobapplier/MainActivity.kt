@@ -11,7 +11,6 @@ import android.os.Bundle
 import android.os.Environment
 import android.provider.DocumentsContract
 import android.provider.MediaStore
-import android.provider.Settings
 import android.support.design.widget.Snackbar
 import android.support.v4.app.ActivityCompat
 import android.support.v4.content.ContextCompat
@@ -49,6 +48,7 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
     private var cvPath = ""
     private var position: Int = 0
     private var showNotice: Boolean = true
+    private var emailCredentialsValid: Boolean = false
     private val values = HashMap<String, String>()
     private lateinit var privateSharedPrefs: SharedPreferences
     private lateinit var adView: AdView
@@ -90,6 +90,8 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
 
     fun applyNow(v: View) {
         if (v.isEnabled) {
+            val emailValue = values["email"]
+            val passwordValue = values["password"]
             setValuesFromView()
             val valuesNotFilledIn = values.filter { (_, value) -> value.isEmpty() || value.isBlank() }
                     .keys.fold("") { acc, value ->
@@ -102,31 +104,52 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
                         .show()
                 return
             } else {
-                val email = Email(
-                        values["email"]!!,
-                        values["password"]!!,
-                        EmailMessage(values["email"]!!,
-                                "Welcome to Job Applier",
-                                "Dear ${values["firstName"]} ${values["lastName"]},\n Welcome to Job Applier.\n This is a test email to valid your gmail account credentials before sending out your C.V.\n Thank you."))
-                EmailService.sendAsyncEmail(email) { ex ->
-                    when (ex) {
-                        is AuthenticationFailedException -> {
-                            val additionalInfo =
-                                    "Your Email: ${values["email"]}.<br /> Please check that your email and password is correct or please enable less secure applications on your gmail account, go here to enable it: https://www.google.com/settings/security/lesssecureapps."
-                            Snackbar.make(adView, "Error with email authentication", Snackbar.LENGTH_INDEFINITE)
-                                    .setActionTextColor(Color.RED)
-                                    .setAction("View details") { viewPopup("Error with email authentication", additionalInfo) }
-                                    .show()
-                        }
-                        is Exception -> {
-                            val additionalInfo = "Your Email: ${values["email"]}"
-                            Snackbar.make(adView, "Error sending email for this job", Snackbar.LENGTH_INDEFINITE)
-                                    .setActionTextColor(Color.RED)
-                                    .setAction("View details") { viewPopup("Error sending email for this job", additionalInfo) }
-                                    .show()
-                        }
-                        else -> askForPermissionToViewAd()
-                    }
+                if ((emailValue == null && passwordValue == null) ||
+                        (emailValue != null && passwordValue != null && (emailValue != email.text.toString() || passwordValue != password.text.toString()) &&
+                        this.emailCredentialsValid) || !this.emailCredentialsValid) {
+                    validateEmailAuthentication()
+                }else{
+                    askForPermissionToViewAd()
+                }
+            }
+        }
+    }
+
+    private fun validateEmailAuthentication() {
+        val email = Email(
+                values["email"]!!,
+                values["password"]!!,
+                EmailMessage(values["email"]!!,
+                        "Welcome to Job Applier",
+                        "Dear ${values["firstName"]} ${values["lastName"]},\n Welcome to Job Applier.\n This is a test email to valid your gmail account credentials before sending out your C.V.\n Thank you."))
+        updateViewElementsStatus(isEnabled = false)
+        EmailService.sendAsyncEmail(email) { ex ->
+            updateViewElementsStatus(isEnabled = true)
+            when (ex) {
+                is AuthenticationFailedException -> {
+                    val link = "https://www.google.com/settings/security/lesssecureapps"
+                    val additionalInfo =
+                            "Your Email: ${values["email"]}.<br /> Please check that your email and password is correct or please enable less secure applications on your gmail account, go here to enable it: <a href='$link'>$link</a>."
+                    Snackbar.make(adView, "Error with email authentication", Snackbar.LENGTH_INDEFINITE)
+                            .setActionTextColor(Color.RED)
+                            .setAction("View details") { viewPopup("Error with email authentication", additionalInfo) }
+                            .show()
+                    this.emailCredentialsValid = false
+                    saveJobDataToSharedPreferences()
+                }
+                is Exception -> {
+                    val additionalInfo = "Your Email: ${values["email"]}"
+                    Snackbar.make(adView, "Error sending email for this job", Snackbar.LENGTH_INDEFINITE)
+                            .setActionTextColor(Color.RED)
+                            .setAction("View details") { viewPopup("Error sending email for this job", additionalInfo) }
+                            .show()
+                    this.emailCredentialsValid = false
+                    saveJobDataToSharedPreferences()
+                }
+                else -> {
+                    this.emailCredentialsValid = true
+                    saveJobDataToSharedPreferences()
+                    askForPermissionToViewAd()
                 }
             }
         }
@@ -166,6 +189,7 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
             }
             putInt(JOB_APPLIER_LOCATION_SELECT_ID, position)
             putBoolean(JOB_APPLIER_IMPORTANT_NOTICE_KEY, showNotice)
+            putBoolean(JOB_APPLIER_VALID_EMAIL_KEY, emailCredentialsValid)
             apply()
         }
     }
@@ -181,6 +205,7 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
         val value = privateSharedPrefs.getInt(JOB_APPLIER_LOCATION_SELECT_ID, 0)
         this.position = value
         this.showNotice = privateSharedPrefs.getBoolean(JOB_APPLIER_IMPORTANT_NOTICE_KEY, true)
+        this.emailCredentialsValid = privateSharedPrefs.getBoolean(JOB_APPLIER_VALID_EMAIL_KEY, false)
     }
 
     private fun updateViewWithData() {
@@ -382,7 +407,7 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
                 REQUEST_WRITE_PERMISSION -> viewAnAd()
             }
         } else {
-            viewPopup("File permissions not enabled", "This app requires access to files. Go to app settings to re-enable.")
+            viewPopup("File permissions not enabled", "This app requires access to files.")
         }
     }
 
@@ -577,5 +602,6 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
         const val JOB_APPLIER_SHARED_KEY = "com.jobapplier.jobapplier.JOB_APPLIER_SHARED_KEY"
         const val JOB_APPLIER_LOCATION_SELECT_ID = "com.jobapplier.jobapplier.LOCATION_SELECT_ID"
         const val JOB_APPLIER_IMPORTANT_NOTICE_KEY = "com.jobapplier.jobapplier.JOB_APPLIER_IMPORTANT_NOTICE_KEY"
+        const val JOB_APPLIER_VALID_EMAIL_KEY = "com.jobapplier.jobapplier.JOB_APPLIER_VALID_EMAIL_KEY"
     }
 }
