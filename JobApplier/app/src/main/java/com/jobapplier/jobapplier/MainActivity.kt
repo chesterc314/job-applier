@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
+import android.database.Cursor
 import android.graphics.Color
 import android.net.Uri
 import android.os.Build
@@ -503,13 +504,10 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
     }
 
     private fun browserDocumentFiles() {
-        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT)
+        val intent = Intent(Intent.ACTION_GET_CONTENT)
         intent.addCategory(Intent.CATEGORY_OPENABLE)
         intent.type = "application/*"
-        val mimeTypes = arrayOf(
-                "application/pdf",
-                "application/msword",
-                "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+        val mimeTypes = arrayOf("application/*")
         intent.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes)
         intent.putExtra(Intent.EXTRA_LOCAL_ONLY, true)
         startActivityForResult(intent, READ_REQUEST_CODE)
@@ -538,19 +536,63 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
                 if ("primary".equals(type, ignoreCase = true)) {
                     return Environment.getExternalStorageDirectory().toString() + "/" + split[1]
                 }
-            } else {
+            } else if (isDownloadsDocument(uri)) {
+                viewPopup("Error selecting file", "Not supported", true)
+                return null
+            } else if (isMediaDocument(uri)) {
                 viewPopup("Error selecting file", "Not supported", true)
                 return null
             }
+        } else if ("content".equals(uri.scheme, ignoreCase = true)) {
+            return if (isGooglePhotosUri(uri)) uri.lastPathSegment else getDataColumn(context, uri, null, null)
         } else if ("file".equals(uri.scheme, ignoreCase = true)) {
             return uri.path
         }
-        viewPopup("Error selecting file", "Not supported", true)
+        return null
+    }
+
+    private fun getDataColumn(context: Context, uri: Uri?, selection: String?, selectionArgs: Array<String>?): String? {
+        var cursor: Cursor? = null
+        val column = "_data"
+        val projection = arrayOf(column)
+        try {
+            cursor = context.contentResolver.query(uri!!, projection, selection, selectionArgs, null)
+            if (cursor != null && cursor.moveToFirst()) {
+                val index = cursor.getColumnIndexOrThrow(column)
+                return cursor.getString(index)
+            }
+        } finally {
+            cursor?.close()
+        }
         return null
     }
 
     private fun isExternalStorageDocument(uri: Uri): Boolean {
         return "com.android.externalstorage.documents" == uri.authority
+    }
+
+    /**
+     * @param uri The Uri to check.
+     * @return Whether the Uri authority is DownloadsProvider.
+     */
+    private fun isDownloadsDocument(uri: Uri): Boolean {
+        return "com.android.providers.downloads.documents" == uri.authority
+    }
+
+    /**
+     * @param uri The Uri to check.
+     * @return Whether the Uri authority is MediaProvider.
+     */
+    private fun isMediaDocument(uri: Uri): Boolean {
+        return "com.android.providers.media.documents" == uri.authority
+    }
+
+    /**
+     * @param uri The Uri to check.
+     * @return Whether the Uri authority is Google Photos.
+     */
+    private fun isGooglePhotosUri(uri: Uri): Boolean {
+        return "com.google.android.apps.photos.content" == uri.authority
     }
 
     companion object {
