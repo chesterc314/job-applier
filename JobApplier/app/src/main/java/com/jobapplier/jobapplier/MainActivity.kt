@@ -2,15 +2,17 @@ package com.jobapplier.jobapplier
 
 import android.Manifest
 import android.app.Activity
-import android.content.*
+import android.content.ActivityNotFoundException
+import android.content.Context
+import android.content.Intent
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
-import android.database.Cursor
 import android.graphics.Color
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.DocumentsContract
-import android.provider.MediaStore
 import android.support.design.widget.Snackbar
 import android.support.v4.app.ActivityCompat
 import android.support.v4.content.ContextCompat
@@ -106,9 +108,9 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
             } else {
                 if ((emailValue == null && passwordValue == null) ||
                         (emailValue != null && passwordValue != null && (emailValue != email.text.toString() || passwordValue != password.text.toString()) &&
-                        this.emailCredentialsValid) || !this.emailCredentialsValid) {
+                                this.emailCredentialsValid) || !this.emailCredentialsValid) {
                     validateEmailAuthentication()
-                }else{
+                } else {
                     askForPermissionToViewAd()
                 }
             }
@@ -277,7 +279,12 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
         val textView = TextView(this)
         textView.movementMethod = LinkMovementMethod.getInstance()
         textView.layoutParams = lp
-        textView.text = Html.fromHtml(text, Html.FROM_HTML_MODE_LEGACY)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            textView.text = Html.fromHtml(text, Html.FROM_HTML_MODE_COMPACT)
+        } else {
+            @Suppress("DEPRECATION")
+            textView.text = Html.fromHtml(text)
+        }
         linearLayout.addView(textView)
         scrollView.addView(linearLayout)
         alertDialogBuilder.setView(scrollView)
@@ -440,11 +447,18 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
     private fun rateApp() {
         val uri = Uri.parse("market://details?id=$packageName")
         val goToMarket = Intent(Intent.ACTION_VIEW, uri)
-        goToMarket.addFlags(
-                Intent.FLAG_ACTIVITY_NO_HISTORY or
-                        Intent.FLAG_ACTIVITY_NEW_DOCUMENT or
-                        Intent.FLAG_ACTIVITY_MULTIPLE_TASK
-        )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            goToMarket.addFlags(
+                    Intent.FLAG_ACTIVITY_NO_HISTORY or
+                            Intent.FLAG_ACTIVITY_NEW_DOCUMENT or
+                            Intent.FLAG_ACTIVITY_MULTIPLE_TASK
+            )
+        } else {
+            goToMarket.addFlags(
+                    Intent.FLAG_ACTIVITY_NO_HISTORY or
+                            Intent.FLAG_ACTIVITY_MULTIPLE_TASK
+            )
+        }
         try {
             startActivity(goToMarket)
         } catch (e: ActivityNotFoundException) {
@@ -489,9 +503,9 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
     }
 
     private fun browserDocumentFiles() {
-        val intent = Intent(Intent.ACTION_GET_CONTENT)
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT)
         intent.addCategory(Intent.CATEGORY_OPENABLE)
-        intent.type = "*/*"
+        intent.type = "application/*"
         val mimeTypes = arrayOf(
                 "application/pdf",
                 "application/msword",
@@ -524,74 +538,19 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener, Vi
                 if ("primary".equals(type, ignoreCase = true)) {
                     return Environment.getExternalStorageDirectory().toString() + "/" + split[1]
                 }
-            } else if (isDownloadsDocument(uri)) {
-                val id = DocumentsContract.getDocumentId(uri)
-                val contentUri = ContentUris.withAppendedId(Uri.parse("content://downloads/public_downloads"), java.lang.Long.valueOf(id))
-                return getDataColumn(context, contentUri, null, null)
-            } else if (isMediaDocument(uri)) {
-                val docId = DocumentsContract.getDocumentId(uri)
-                val split = docId.split(":".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
-                val type = split[0]
-                var contentUri: Uri? = null
-                when (type) {
-                    "image" -> contentUri = MediaStore.Images.Media.EXTERNAL_CONTENT_URI
-                    "video" -> contentUri = MediaStore.Video.Media.EXTERNAL_CONTENT_URI
-                    "audio" -> contentUri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
-                }
-                val selection = "_id=?"
-                val selectionArgs = arrayOf(split[1])
-                return getDataColumn(context, contentUri, selection, selectionArgs)
+            } else {
+                viewPopup("Error selecting file", "Not supported", true)
+                return null
             }
-        } else if ("content".equals(uri.scheme, ignoreCase = true)) {
-            return if (isGooglePhotosUri(uri)) uri.lastPathSegment else getDataColumn(context, uri, null, null)
         } else if ("file".equals(uri.scheme, ignoreCase = true)) {
             return uri.path
         }
-        return null
-    }
-
-    private fun getDataColumn(context: Context, uri: Uri?, selection: String?, selectionArgs: Array<String>?): String? {
-        var cursor: Cursor? = null
-        val column = "_data"
-        val projection = arrayOf(column)
-        try {
-            cursor = context.contentResolver.query(uri!!, projection, selection, selectionArgs, null)
-            if (cursor != null && cursor.moveToFirst()) {
-                val index = cursor.getColumnIndexOrThrow(column)
-                return cursor.getString(index)
-            }
-        } finally {
-            cursor?.close()
-        }
+        viewPopup("Error selecting file", "Not supported", true)
         return null
     }
 
     private fun isExternalStorageDocument(uri: Uri): Boolean {
         return "com.android.externalstorage.documents" == uri.authority
-    }
-
-    /**
-     * @param uri The Uri to check.
-     * @return Whether the Uri authority is DownloadsProvider.
-     */
-    private fun isDownloadsDocument(uri: Uri): Boolean {
-        return "com.android.providers.downloads.documents" == uri.authority
-    }
-
-    /**
-     * @param uri The Uri to check.
-     * @return Whether the Uri authority is MediaProvider.
-     */
-    private fun isMediaDocument(uri: Uri): Boolean {
-        return "com.android.providers.media.documents" == uri.authority
-    }
-
-    /**
-     * @param uri The Uri to check.
-     * @return Whether the Uri authority is Google Photos.
-     */
-    private fun isGooglePhotosUri(uri: Uri): Boolean {
-        return "com.google.android.apps.photos.content" == uri.authority
     }
 
     companion object {
